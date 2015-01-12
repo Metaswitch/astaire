@@ -193,6 +193,17 @@ namespace Memcached
     uint32_t _expiry;
   };
 
+  class Connection
+  {
+    Connection(std::string address,
+               int port);
+    ~Connection();
+
+  private:
+    int _sock;
+    std::string _buffer;
+  };
+
   // Entry point for parsing messages off the wire.
   //
   // @returns  True if the string contains a complete message.

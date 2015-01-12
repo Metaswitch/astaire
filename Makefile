@@ -1,12 +1,43 @@
-.PHONY : all
-all : astaire
+# Top level Makefile for building astaire
 
-.PHONY : clean
-clean :
-	-rm astaire *.o
+# this should come first so make does the right thing by default
+all: build
 
-%.o : %.cpp astaire.hpp Makefile
-	g++ -std=c++11 -g -gdwarf-2 -O0 -c -o $@ $(filter %.cpp, $^)
+ROOT ?= ${PWD}
+MK_DIR := ${ROOT}/mk
+PREFIX ?= ${ROOT}/usr
+INSTALL_DIR ?= ${PREFIX}
+MODULE_DIR := ${ROOT}/modules
 
-astaire : main.o astaire.o
-	g++ -o astaire $^
+DEB_COMPONENT := astaire
+DEB_MAJOR_VERSION := 1.0${DEB_VERSION_QUALIFIER}
+DEB_NAMES := astaire-libs astaire-libs-dbg astaire astaire-dbg
+
+INCLUDE_DIR := ${INSTALL_DIR}/include
+LIB_DIR := ${INSTALL_DIR}/lib
+
+SUBMODULES := libmemcached sas-client
+
+include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
+include ${MK_DIR}/astaire.mk
+
+build: ${SUBMODULES} astaire
+
+test: ${SUBMODULES} astaire_test
+
+testall: $(patsubst %, %_test, ${SUBMODULES}) test
+
+clean: $(patsubst %, %_clean, ${SUBMODULES}) astaire_clean
+	rm -rf ${ROOT}/usr
+	rm -rf ${ROOT}/build
+
+distclean: $(patsubst %, %_distclean, ${SUBMODULES}) astaire_distclean
+	rm -rf ${ROOT}/usr
+	rm -rf ${ROOT}/build
+
+include build-infra/cw-deb.mk
+
+.PHONY: deb
+deb: build deb-only
+
+.PHONY: all build test clean distclean

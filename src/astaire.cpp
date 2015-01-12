@@ -215,7 +215,6 @@ inline void Memcached::TapConnectReq::setVBuckets(const BucketList& buckets)
 
 Memcached::TapMutateReq::TapMutateReq(const std::string& msg) : BaseReq(msg)
 {
-  const size_t raw_length = msg.length();
   const char* raw = msg.data();
   uint16_t key_length = HDR_GET(raw, key_length);
   uint8_t extra_length = HDR_GET(raw, extra_length);
