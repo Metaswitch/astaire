@@ -195,11 +195,20 @@ namespace Memcached
 
   class Connection
   {
-    Connection(std::string address,
-               int port);
+  public:
+    Connection(const std::string& address,
+               const int port);
     ~Connection();
 
+    bool connect();
+    void disconnect();
+
+    bool send(const Base& msg);
+    Base* recv();
+
   private:
+    const std::string _address;
+    const int _port;
     int _sock;
     std::string _buffer;
   };

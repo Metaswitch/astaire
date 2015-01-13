@@ -2,6 +2,10 @@
 
 #include <cstring>
 #include <cassert>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netdb.h>
+#include <unistd.h>
 
 void Memcached::Utils::write(const std::string& str, std::string& ss)
 {
@@ -236,4 +240,117 @@ Memcached::TapMutateReq::TapMutateReq(const std::string& msg) : BaseReq(msg)
   _flags = Utils::network_to_host(((uint32_t*)extra.data())[0]);
   _expiry = Utils::network_to_host(((uint32_t*)extra.data())[1]);
   _value = msg.substr(sizeof(MsgHdr) + extra_length + key_length, body_length - (extra_length + key_length));
+}
+
+Memcached::Connection::Connection(const std::string& address,
+                                  int port) :
+  _address(address),
+  _port(port),
+  _sock(-1)
+{
+}
+
+Memcached::Connection::~Connection()
+{
+  disconnect();
+}
+
+bool Memcached::Connection::connect()
+{
+  struct addrinfo ai_hint;
+  memset(&ai_hint, 0x00, sizeof(ai_hint));
+  ai_hint.ai_family = AF_INET;
+  ai_hint.ai_socktype = SOCK_STREAM;
+
+  struct addrinfo* ai;
+  int rc = getaddrinfo(_address.c_str(), std::to_string(_port).c_str(), &ai_hint, &ai);
+  if (rc < 0)
+  {
+    fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(rc));
+    return false;
+  }
+
+  _sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+  if (_sock < 0)
+  {
+    perror("socket()");
+    return false;
+  }
+
+  if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
+  {
+    close(_sock); _sock = -1;
+    perror("connect()");
+    return false;
+  }
+
+  freeaddrinfo(ai); ai = NULL;
+
+  return true;
+}
+
+void Memcached::Connection::disconnect()
+{
+  if (_sock > 0)
+  {
+    close(_sock); _sock = -1;
+  }
+}
+
+bool Memcached::Connection::send(const Memcached::Base& req)
+{
+  if (_sock == -1)
+  {
+    return false;
+  }
+
+  std::string bin = req.to_wire();
+
+  // Send the command
+  if (::send(_sock, bin.data(), bin.length(), 0) < 0)
+  {
+    close(_sock); _sock = -1;
+    perror("send():");
+    return false;
+  }
+  return true;
+}
+
+Memcached::Base* Memcached::Connection::recv()
+{
+  if (_sock == -1)
+  {
+    return NULL;
+  }
+
+#define BUFLEN 128
+  char buf[BUFLEN];
+  Memcached::Base* msg = NULL;
+  ssize_t recv_size = 0;
+
+  bool finished = Memcached::from_wire(_buffer, msg);
+  while (!finished)
+  {
+    recv_size = ::recv(_sock, buf, BUFLEN, 0);
+
+    if (recv_size > 0)
+    {
+      _buffer.append(buf, recv_size);
+      finished = Memcached::from_wire(_buffer, msg);
+    }
+    else if (recv_size == 0)
+    {
+      fprintf(stderr, "Socket closed by peer\n");
+      close(_sock); _sock = -1;
+      return NULL;
+    }
+    else
+    {
+      perror("recv():");
+      close(_sock); _sock = -1;
+      return NULL;
+    }
+  }
+
+  return (Memcached::BaseRsp*)msg;
 }
