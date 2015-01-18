@@ -172,25 +172,26 @@ std::string Memcached::SetReq::generate_value() const
   return _value;
 }
 
-Memcached::TapConnectReq::TapConnectReq() :
+Memcached::TapConnectReq::TapConnectReq(const BucketList& buckets) :
   BaseReq(0x40, // TAP_CONNECT
           "",
           0,
           0,
           0
-         )
+         ),
+  _buckets(buckets)
 {
 }
 
 std::string Memcached::TapConnectReq::generate_extra() const
 {
   std::string ss;
-  uint64_t extra = 0x0000000000000002; // DUMP
+  uint32_t extra = 0x00000002; // DUMP
   if (!_buckets.empty())
   {
-    extra |= 0x0000000000000004; // LIST_BUCKETS
+    extra |= 0x00000004; // LIST_BUCKETS
   }
-  Utils::write((uint64_t)extra, ss);
+  Utils::write((uint32_t)extra, ss);
   return ss;
 }
 
@@ -210,11 +211,6 @@ std::string Memcached::TapConnectReq::generate_value() const
   }
 
   return ss;
-}
-
-inline void Memcached::TapConnectReq::setVBuckets(const BucketList& buckets)
-{
-  _buckets = buckets;
 }
 
 Memcached::TapMutateReq::TapMutateReq(const std::string& msg) : BaseReq(msg)
@@ -240,6 +236,13 @@ Memcached::TapMutateReq::TapMutateReq(const std::string& msg) : BaseReq(msg)
   _flags = Utils::network_to_host(((uint32_t*)extra.data())[0]);
   _expiry = Utils::network_to_host(((uint32_t*)extra.data())[1]);
   _value = msg.substr(sizeof(MsgHdr) + extra_length + key_length, body_length - (extra_length + key_length));
+}
+
+std::string Memcached::SetVBucketReq::generate_extra() const
+{
+  std::string ss;
+  Utils::write((uint32_t)_status, ss);
+  return ss;
 }
 
 Memcached::Connection::Connection(const std::string& address,

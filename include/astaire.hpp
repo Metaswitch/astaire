@@ -46,6 +46,22 @@ namespace Memcached
     }
   }
 
+  enum struct OpCode
+  {
+    SET = 0x01,
+    TAP_CONNECT = 0x40,
+    TAP_MUTATE = 0x41,
+    SET_VBUCKET = 0x3d
+  };
+
+  enum struct VBucketStatus
+  {
+    ACTIVE = 0x01,
+    REPLICA = 0x02,
+    PENDING = 0x03,
+    DEAD = 0x04
+  };
+
   /* Binary structure of the fixed-length header for Memcached messages */
   struct MsgHdr
   {
@@ -168,9 +184,7 @@ namespace Memcached
   class TapConnectReq : public BaseReq
   {
   public:
-    TapConnectReq();
-
-    void setVBuckets(const std::vector<uint16_t>& buckets);
+    TapConnectReq(const BucketList& buckets);
 
   protected:
     std::string generate_extra() const;
@@ -191,6 +205,25 @@ namespace Memcached
     std::string _value;
     uint32_t _flags;
     uint32_t _expiry;
+  };
+
+  class SetVBucketReq : public BaseReq
+  {
+  public:
+    SetVBucketReq(uint16_t vbucket, VBucketStatus status) :
+      BaseReq((uint8_t)OpCode::SET_VBUCKET,
+              "",
+              vbucket,
+              0,
+              0),
+      _status(status)
+    {
+    }
+
+    std::string generate_extra() const;
+
+  private:
+    VBucketStatus _status;
   };
 
   class Connection
