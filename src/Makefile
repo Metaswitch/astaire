@@ -14,12 +14,13 @@ TARGET_TEST := astaire_test
 TARGET_SOURCES := astaire.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
+									signalhandler.cpp \
 									logger.cpp \
 									log.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
-TARGET_SOURCES_TEST := test_main.cpp
+TARGET_SOURCES_TEST := main.cpp
 
 TARGET_EXTRA_OBJS_TEST := gmock-all.o \
                           gtest-all.o
