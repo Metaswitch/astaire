@@ -93,12 +93,12 @@ namespace Memcached
     Base(const std::string& msg);
     virtual ~Base() {};
 
-    virtual const bool is_request() const = 0;
-    virtual const bool is_response() const = 0;
-    inline const uint8_t op_code() const { return _op_code; };
+    virtual bool is_request() const = 0;
+    virtual bool is_response() const = 0;
+    inline uint8_t op_code() const { return _op_code; };
     inline const std::string& key() const { return _key; };
-    inline const uint32_t opaque() const { return _opaque; };
-    inline const uint64_t cas() const { return _cas; };
+    inline uint32_t opaque() const { return _opaque; };
+    inline uint64_t cas() const { return _cas; };
 
     std::string to_wire() const;
 
@@ -128,9 +128,9 @@ namespace Memcached
     }
     BaseReq(const std::string& msg);
 
-    const bool is_request() const { return true; }
-    const bool is_response() const { return false; }
-    const uint16_t vbucket() const { return _vbucket; }
+    bool is_request() const { return true; }
+    bool is_response() const { return false; }
+    uint16_t vbucket() const { return _vbucket; }
 
   protected:
     uint16_t generate_vbucket_or_status() const { return _vbucket; }
@@ -152,9 +152,9 @@ namespace Memcached
     }
     BaseRsp(const std::string& msg);
 
-    const bool is_request() const { return false; }
-    const bool is_response() const { return true; }
-    const uint16_t result_code() const { return _status; }
+    bool is_request() const { return false; }
+    bool is_response() const { return true; }
+    uint16_t result_code() const { return _status; }
 
   protected:
     uint16_t generate_vbucket_or_status() const { return _status; }
