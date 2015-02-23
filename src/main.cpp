@@ -71,9 +71,9 @@ int main(int argc, char** argv)
   printf("Inserting keys\n");
 
   Log::setLoggingLevel(1);
-  Store* store = new MemcachedStore(true, // binary
+  Store* store = new MemcachedStore(true,
                                     "./servers.conf");
-  Store* store2 = new MemcachedStore(true, // binary
+  Store* store2 = new MemcachedStore(true,
                                      "./servers2.conf");
 
   for (int ii = 0; ii < 100; ii++)
@@ -96,6 +96,8 @@ int main(int argc, char** argv)
   getchar();
   printf("Starting TAP\n");
 
+  // TODO Calculate source servers and bucket lists.
+
   Memcached::TapConnectReq tap({1, 4, 6});
   cxn.send(tap);
 
@@ -112,11 +114,21 @@ int main(int argc, char** argv)
     if (req->op_code() == 0x41) // TAP_MUTATE
     {
       Memcached::TapMutateReq* mutate = (Memcached::TapMutateReq*)req;
-//      std::cout << "Received TAP_MUTATE(" << (uint32_t)mutate->op_code() << ") for key: " << mutate->key() << " and value: " << mutate->value() << std::endl;
+//      std::cout << "Received TAP_MUTATE("
+//                << (uint32_t)mutate->op_code()
+//                << ") for key: "
+//                << mutate->key()
+//                << " and value: "
+//                << mutate->value()
+//                << std::endl;
 
-      std::string key = mutate->key().substr(7, std::string::npos);
+      // Split table from key.
+      std::string full_key = mutate->key();
+      size_t split_pos = full_key.find("//");
+      std::string table = full_key.substr(0, split_pos);
+      std::string key = full_key.substr(split_pos + 2, std::string::npos);
 
-      Store::Status rc = store2->set_data("table",
+      Store::Status rc = store2->set_data(table,
                                           key,
                                           mutate->value(),
                                           0,
