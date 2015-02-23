@@ -1,0 +1,22 @@
+Source: astaire
+Section: network
+Priority: optional
+# This field must stay as 'Project Clearwater Maintainers', as
+# clearwater-infrastructure explicitly checks for packages of this name when
+# updating
+Maintainer: Project Clearwater Maintainers <maintainers@projectclearwater.org>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.2
+Homepage: http://projectclearwater.org/
+
+Package: astaire
+Architecture: any
+Suggests: astaire-dbg
+Description: astaire, active resynchronisation for memcached clusters
+
+Package: astaire-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: astaire (= ${binary:Version}), gdb
+Description: Debugging symbols for astaire

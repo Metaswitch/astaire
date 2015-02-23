@@ -1,0 +1,7 @@
+*.debhelper
+*.debhelper.log
+*.substvars
+/changelog
+/files
+/astaire-dbg/
+/astaire/

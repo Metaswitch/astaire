@@ -11,7 +11,7 @@ MODULE_DIR := ${ROOT}/modules
 
 DEB_COMPONENT := astaire
 DEB_MAJOR_VERSION := 1.0${DEB_VERSION_QUALIFIER}
-DEB_NAMES := astaire-libs astaire-libs-dbg astaire astaire-dbg
+DEB_NAMES := astaire astaire-dbg
 
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
