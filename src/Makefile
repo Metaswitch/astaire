@@ -11,7 +11,7 @@ GMOCK_DIR := $(ROOT)/modules/gmock
 TARGET := astaire
 TARGET_TEST := astaire_test
 
-TARGET_SOURCES := astaire.cpp \
+TARGET_SOURCES := memcached_tap_client.cpp \
                   memcachedstore.cpp \
                   memcachedstoreview.cpp \
 									signalhandler.cpp \
