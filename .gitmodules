@@ -1,0 +1,15 @@
+[submodule "modules/cpp-common"]
+	path = modules/cpp-common
+	url = git@github.com:Metaswitch/cpp-common.git
+[submodule "modules/libmemcached"]
+	path = modules/libmemcached
+	url = git@github.com:Metaswitch/libmemcached-upstream.git
+[submodule "build-infra"]
+	path = build-infra
+	url = git@github.com:Metaswitch/clearwater-build-infra.git
+[submodule "modules/sas-client"]
+	path = modules/sas-client
+	url = git@github.com:Metaswitch/sas-client.git
+[submodule "modules/gmock"]
+	path = modules/gmock
+	url = git@github.com:Metaswitch/gmock-upstream.git
