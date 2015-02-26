@@ -1,5 +1,5 @@
-#ifndef ASTAIR_H__
-#define ASTAIR_H__
+#ifndef ASTAIRE_H__
+#define ASTAIRE_H__
 
 #include <vector>
 #include <string>
@@ -8,9 +8,9 @@
 #include <boost/detail/endian.hpp>
 
 // Simple Object Definitions
-typedef uint16_t             Bucket;
-typedef std::vector<Bucket>  BucketList;
-typedef BucketList::const_iterator BucketIter;
+typedef uint16_t             VBucket;
+typedef std::vector<VBucket>  VBucketList;
+typedef VBucketList::const_iterator VBucketIter;
 
 #define HDR_GET(RAW, FIELD) \
   ::Memcached::Utils::network_to_host(((MsgHdr*)(RAW))->FIELD)
@@ -80,18 +80,18 @@ namespace Memcached
    *
    * This class is mostly used for defining common utilities and specifying a
    * common API. */
-  class Base
+  class BaseMessage
   {
   public:
-    Base(uint8_t op_code, std::string key, uint32_t opaque, uint64_t cas) :
+    BaseMessage(uint8_t op_code, std::string key, uint32_t opaque, uint64_t cas) :
       _op_code(op_code),
       _key(key),
       _opaque(opaque),
       _cas(cas)
     {
     }
-    Base(const std::string& msg);
-    virtual ~Base() {};
+    BaseMessage(const std::string& msg);
+    virtual ~BaseMessage() {};
 
     virtual bool is_request() const = 0;
     virtual bool is_response() const = 0;
@@ -114,7 +114,7 @@ namespace Memcached
     uint64_t _cas;
   };
 
-  class BaseReq : public Base
+  class BaseReq : public BaseMessage
   {
   public:
     BaseReq(uint8_t command,
@@ -122,7 +122,7 @@ namespace Memcached
             uint16_t vbucket,
             uint32_t opaque,
             uint64_t cas) :
-      Base(command, key, opaque, cas),
+      BaseMessage(command, key, opaque, cas),
       _vbucket(vbucket)
     {
     }
@@ -138,7 +138,7 @@ namespace Memcached
     uint16_t _vbucket;
   };
 
-  class BaseRsp : public Base
+  class BaseRsp : public BaseMessage
   {
   public:
     BaseRsp(uint8_t command,
@@ -146,7 +146,7 @@ namespace Memcached
             uint16_t status,
             uint32_t opaque,
             uint64_t cas) :
-      Base(command, key, opaque, cas),
+      BaseMessage(command, key, opaque, cas),
       _status(status)
     {
     }
@@ -184,7 +184,7 @@ namespace Memcached
   class TapConnectReq : public BaseReq
   {
   public:
-    TapConnectReq(const BucketList& buckets);
+    TapConnectReq(const VBucketList& buckets);
 
   protected:
     std::string generate_extra() const;
@@ -211,11 +211,11 @@ namespace Memcached
   {
   public:
     SetVBucketReq(uint16_t vbucket, VBucketStatus status) :
-      BaseReq((uint8_t)OpCode::SET_VBUCKET,
-              "",
-              vbucket,
-              0,
-              0),
+      BaseReq((uint8_t)OpCode::SET_VBUCKET, // Command Code
+              "",                           // Key
+              vbucket,                      // VBucket
+              0,                            // Opaque (unused)
+              0),                           // CAS (unused)
       _status(status)
     {
     }
@@ -236,8 +236,8 @@ namespace Memcached
     bool connect();
     void disconnect();
 
-    bool send(const Base& msg);
-    Base* recv();
+    bool send(const BaseMessage& msg);
+    BaseMessage* recv();
 
   private:
     const std::string _address;
@@ -253,14 +253,14 @@ namespace Memcached
   //                 complete, it is removed from the front of the string
   //                 before this function returns.
   // @param output - A pointer to store the parsed message.
-  bool from_wire(std::string& binary, Base*& output);
+  bool from_wire(std::string& binary, BaseMessage*& output);
 
   // Parsing utility fuctions.
   bool is_msg_complete(const std::string& msg,
                        bool& request,
                        uint16_t& body_length,
                        uint8_t& op_code);
-  template <class T> Base* from_wire_int(const std::string& msg)
+  template <class T> BaseMessage* from_wire_int(const std::string& msg)
   {
     return new T(msg);
   }

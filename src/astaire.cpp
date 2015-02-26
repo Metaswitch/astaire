@@ -41,7 +41,7 @@ bool Memcached::is_msg_complete(const std::string& msg,
 
   if (raw_length < sizeof(MsgHdr) + body_length)
   {
-    // Too short afterall
+    // Too short after all
     return false;
   }
 
@@ -52,7 +52,7 @@ bool Memcached::is_msg_complete(const std::string& msg,
 }
 
 bool Memcached::from_wire(std::string& msg,
-                          Memcached::Base*& output)
+                          Memcached::BaseMessage*& output)
 {
   bool request;
   uint16_t body_length;
@@ -97,7 +97,7 @@ bool Memcached::from_wire(std::string& msg,
   return true;
 }
 
-std::string Memcached::Base::to_wire() const
+std::string Memcached::BaseMessage::to_wire() const
 {
   std::string ss;
 
@@ -126,7 +126,7 @@ std::string Memcached::Base::to_wire() const
   return ss;
 }
 
-Memcached::Base::Base(const std::string& msg)
+Memcached::BaseMessage::BaseMessage(const std::string& msg)
 {
   const char* raw = msg.data();
   _op_code = HDR_GET(raw, op_code);
@@ -136,12 +136,12 @@ Memcached::Base::Base(const std::string& msg)
                     HDR_GET(raw, key_length));
 }
 
-Memcached::BaseReq::BaseReq(const std::string& msg) : Base(msg)
+Memcached::BaseReq::BaseReq(const std::string& msg) : BaseMessage(msg)
 {
   _vbucket = HDR_GET(msg.data(), vbucket_or_status);
 }
 
-Memcached::BaseRsp::BaseRsp(const std::string& msg) : Base(msg)
+Memcached::BaseRsp::BaseRsp(const std::string& msg) : BaseMessage(msg)
 {
   _status = HDR_GET(msg.data(), vbucket_or_status);
 }
@@ -172,7 +172,7 @@ std::string Memcached::SetReq::generate_value() const
   return _value;
 }
 
-Memcached::TapConnectReq::TapConnectReq(const BucketList& buckets) :
+Memcached::TapConnectReq::TapConnectReq(const VBucketList& buckets) :
   BaseReq(0x40, // TAP_CONNECT
           "",
           0,
@@ -202,11 +202,11 @@ std::string Memcached::TapConnectReq::generate_value() const
   if (!_buckets.empty())
   {
     Utils::write((uint16_t)_buckets.size(), ss);
-    for (BucketIter it = _buckets.begin();
+    for (VBucketIter it = _buckets.begin();
          it != _buckets.end();
          ++it)
     {
-      Utils::write((uint16_t)*it, ss); // Bucket ID
+      Utils::write((uint16_t)*it, ss); // VBucket ID
     }
   }
 
@@ -262,7 +262,7 @@ bool Memcached::Connection::connect()
 {
   struct addrinfo ai_hint;
   memset(&ai_hint, 0x00, sizeof(ai_hint));
-  ai_hint.ai_family = AF_INET;
+  ai_hint.ai_family = AF_UNSPEC;
   ai_hint.ai_socktype = SOCK_STREAM;
 
   struct addrinfo* ai;
@@ -300,7 +300,7 @@ void Memcached::Connection::disconnect()
   }
 }
 
-bool Memcached::Connection::send(const Memcached::Base& req)
+bool Memcached::Connection::send(const Memcached::BaseMessage& req)
 {
   if (_sock == -1)
   {
@@ -319,16 +319,16 @@ bool Memcached::Connection::send(const Memcached::Base& req)
   return true;
 }
 
-Memcached::Base* Memcached::Connection::recv()
+Memcached::BaseMessage* Memcached::Connection::recv()
 {
   if (_sock == -1)
   {
     return NULL;
   }
 
-#define BUFLEN 128
+  static const int BUFLEN = 128;
   char buf[BUFLEN];
-  Memcached::Base* msg = NULL;
+  Memcached::BaseMessage* msg = NULL;
   ssize_t recv_size = 0;
 
   bool finished = Memcached::from_wire(_buffer, msg);
@@ -355,5 +355,5 @@ Memcached::Base* Memcached::Connection::recv()
     }
   }
 
-  return (Memcached::BaseRsp*)msg;
+  return msg;
 }

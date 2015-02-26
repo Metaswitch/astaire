@@ -12,11 +12,11 @@ Homepage: http://projectclearwater.org/
 Package: astaire
 Architecture: any
 Suggests: astaire-dbg
-Description: astaire, active resynchronisation for memcached clusters
+Description: Astaire, active resynchronisation for memcached clusters
 
 Package: astaire-dbg
 Architecture: any
 Section: debug
 Priority: extra
 Depends: astaire (= ${binary:Version}), gdb
-Description: Debugging symbols for astaire
+Description: Debugging symbols for Astaire
