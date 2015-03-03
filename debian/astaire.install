@@ -1,1 +1,2 @@
 build/bin/astaire usr/share/clearwater/bin
+root/* /
