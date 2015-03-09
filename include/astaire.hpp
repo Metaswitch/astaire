@@ -59,6 +59,8 @@ private:
   void blacklist_server(OutstandingWorkList& owl, const std::string& server);
   bool is_owl_valid(const OutstandingWorkList& owl);
 
+  static uint16_t vbucket_for_key(const std::string& key);
+
   Updater<void, Astaire>* _updater;
   MemcachedStoreView* _view;
   MemcachedConfigReader* _view_cfg;

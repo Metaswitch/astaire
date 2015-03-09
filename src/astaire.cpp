@@ -60,11 +60,21 @@ void* Astaire::tap_buckets_thread(void *data)
   Astaire::TapBucketsThreadData* tap_data =
     (Astaire::TapBucketsThreadData*)data;
 
-  Memcached::Connection tap_conn(tap_data->tap_server);
-  int rc = tap_conn.connect();
+  Memcached::Connection local_conn(tap_data->local_server);
+  int rc = local_conn.connect();
   if (rc != 0)
   {
-    LOG_ERROR("Failed to connect to %s, error was (%d)",
+    LOG_ERROR("Failed to connect to local server %s, error was (%d)",
+              tap_data->local_server.c_str(),
+              rc);
+    return data;
+  }
+
+  Memcached::Connection tap_conn(tap_data->tap_server);
+  rc = tap_conn.connect();
+  if (rc != 0)
+  {
+    LOG_ERROR("Failed to connect to remote server %s, error was (%d)",
               tap_data->tap_server.c_str(),
               rc);
     return data;
@@ -106,21 +116,30 @@ void* Astaire::tap_buckets_thread(void *data)
       if (req->op_code() == 0x41) // TAP_MUTATE
       {
         Memcached::TapMutateReq* mutate = (Memcached::TapMutateReq*)req;
-        LOG_DEBUG("Received TAP_MUTATE for key: %s", mutate->key().c_str());
+        uint16_t vbucket = vbucket_for_key(mutate->key());
+        LOG_DEBUG("Received TAP_MUTATE for key %s from bucket %d",
+                  mutate->key().c_str(),
+                  vbucket);
 
         // Ths can be removed once vBucket filtering is done on the Memcached
         // server.
         std::vector<uint16_t>::iterator iter =
           std::find(tap_data->buckets.begin(),
                     tap_data->buckets.end(),
-                    mutate->vbucket());
+                    vbucket);
         if (iter == tap_data->buckets.end())
         {
           LOG_DEBUG("Disarding TAP_MUTATE for incorrect vBucket");
         }
         else
         {
-          // TODO ADD THE KEY BACK
+          LOG_DEBUG("ADDing record to local memcached");
+          Memcached::AddReq add(mutate->key(),
+                                mutate->vbucket(),
+                                mutate->value());
+          local_conn.send(add);
+          Memcached::BaseMessage* add_rsp = local_conn.recv();
+          delete add_rsp;
         }
       }
     }
@@ -332,4 +351,18 @@ bool Astaire::is_owl_valid(const OutstandingWorkList& owl)
     }
   }
   return true;
+}
+
+// Must match the same function in https://github.com/Metaswitch/cpp-common/blob/master/src/memcachedstore.cpp.
+//
+// Should be removed once memcached can supply vbuckets on the TAP protocol.
+#include "libmemcached/memcached.h"
+uint16_t Astaire::vbucket_for_key(const std::string& key)
+{
+  // Hash the key and convert the hash to a vbucket.
+  int hash = memcached_generate_hash_value(key.data(),
+                                           key.length(),
+                                           MEMCACHED_HASH_MD5);
+  int vbucket = hash & (128 - 1);
+  return vbucket;
 }

@@ -82,9 +82,9 @@ bool Memcached::from_wire(std::string& msg,
   {
     switch (op_code)
     {
-    case 0x01:
-      // SET
-      output = Memcached::from_wire_int<Memcached::SetRsp>(msg);
+    case 0x02:
+      // ADD
+      output = Memcached::from_wire_int<Memcached::AddRsp>(msg);
       break;
     default:
       output = Memcached::from_wire_int<Memcached::BaseRsp>(msg);
@@ -147,10 +147,10 @@ Memcached::BaseRsp::BaseRsp(const std::string& msg) : BaseMessage(msg)
   _status = HDR_GET(msg.data(), vbucket_or_status);
 }
 
-Memcached::SetReq::SetReq(std::string key,
+Memcached::AddReq::AddReq(std::string key,
                           uint16_t vbucket,
                           std::string value) :
-  BaseReq(0x01, // SET
+  BaseReq(0x02, // ADD
           key,
           vbucket,
           0,
@@ -160,7 +160,7 @@ Memcached::SetReq::SetReq(std::string key,
 {
 }
 
-std::string Memcached::SetReq::generate_extra() const
+std::string Memcached::AddReq::generate_extra() const
 {
   std::string ss;
   Utils::write((uint32_t)0x00000000, ss); // Flags
@@ -168,7 +168,7 @@ std::string Memcached::SetReq::generate_extra() const
   return ss;
 }
 
-std::string Memcached::SetReq::generate_value() const
+std::string Memcached::AddReq::generate_value() const
 {
   return _value;
 }

@@ -163,10 +163,10 @@ namespace Memcached
     uint16_t _status;
   };
 
-  class SetReq : public BaseReq
+  class AddReq : public BaseReq
   {
   public:
-    SetReq(std::string key, uint16_t vbucket, std::string value);
+    AddReq(std::string key, uint16_t vbucket, std::string value);
 
   protected:
     std::string generate_extra() const;
@@ -176,10 +176,10 @@ namespace Memcached
     std::string _value;
   };
 
-  class SetRsp : public BaseRsp
+  class AddRsp : public BaseRsp
   {
   public:
-    SetRsp(const std::string& msg) : BaseRsp(msg) {};
+    AddRsp(const std::string& msg) : BaseRsp(msg) {};
   };
 
   class TapConnectReq : public BaseReq
