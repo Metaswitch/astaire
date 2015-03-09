@@ -1,11 +1,12 @@
-#ifndef ASTAIRE_H__
-#define ASTAIRE_H__
+#ifndef MEMCACHED_TAP_CLIENT_H__
+#define MEMCACHED_TAP_CLIENT_H__
 
 #include <vector>
 #include <string>
 #include <cstdint>
 #include <arpa/inet.h>
 #include <boost/detail/endian.hpp>
+#include <log.h>
 
 // Simple Object Definitions
 typedef uint16_t             VBucket;
@@ -229,11 +230,10 @@ namespace Memcached
   class Connection
   {
   public:
-    Connection(const std::string& address,
-               const int port);
+    Connection(const std::string& address);
     ~Connection();
 
-    bool connect();
+    int connect();
     void disconnect();
 
     bool send(const BaseMessage& msg);
@@ -241,7 +241,6 @@ namespace Memcached
 
   private:
     const std::string _address;
-    const int _port;
     int _sock;
     std::string _buffer;
   };

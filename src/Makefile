@@ -12,9 +12,13 @@ TARGET := astaire
 TARGET_TEST := astaire_test
 
 TARGET_SOURCES := memcached_tap_client.cpp \
-                  memcachedstore.cpp \
+                  memcached_config.cpp \
                   memcachedstoreview.cpp \
+									astaire.cpp \
 									signalhandler.cpp \
+									exception_handler.cpp \
+									health_checker.cpp \
+									utils.cpp \
 									logger.cpp \
 									log.cpp
 
@@ -75,6 +79,8 @@ LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
            -lpthread \
            -lsas \
+					 -lboost_filesystem \
+					 -lboost_system \
 					 -lrt
 
 # Test build uses just-built libraries, which may not be installed
