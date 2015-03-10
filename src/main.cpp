@@ -3,6 +3,7 @@
 #include "exception_handler.h"
 #include "astaire.hpp"
 #include "astaire_pd_definitions.hpp"
+#include "astaire_statistics.h"
 
 #include <getopt.h>
 #include <boost/filesystem.hpp>
@@ -234,14 +235,26 @@ int main(int argc, char** argv)
     AlarmState::clear_all("astaire");
   }
 
+  if (options.magic != "")
+  {
+    do_magic(options);
+    return 0;
+  }
+
   // These values match those in MemcachedStore's constructor
   MemcachedStoreView* view = new MemcachedStoreView(128, 2);
   MemcachedConfigReader* view_cfg =
     new MemcachedConfigFileReader(options.cluster_settings_file);
 
+  // Create statistics infrastructure.
+  std::string stats[] = { "astaire_global", "astaire_connections" };
+  LastValueCache* lvc = new LastValueCache(2, stats, p.string());
+  AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
+
   Astaire* astaire = new Astaire(view,
                                  view_cfg,
                                  astaire_resync_alarm,
+                                 global_stats,
                                  options.local_memcached_server);
 
   sem_wait(&term_sem);

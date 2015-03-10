@@ -2,6 +2,7 @@
 #define ASTAIRE_H__
 
 #include "memcachedstoreview.h"
+#include "astaire_statistics.h"
 #include "updater.h"
 #include "alarm.h"
 
@@ -15,10 +16,12 @@ public:
   Astaire(MemcachedStoreView* view,
           MemcachedConfigReader* view_cfg,
           Alarm* alarm,
+          AstaireGlobalStatistics* global_stats,
           std::string self) :
     _view(view),
     _view_cfg(view_cfg),
     _alarm(alarm),
+    _global_stats(global_stats),
     _self(self)
   {
     _updater = new Updater<void, Astaire>(this,
@@ -37,17 +40,20 @@ public:
   {
     TapBucketsThreadData(const std::string& tap_server,
                          const std::string& local_server,
-                         const std::vector<uint16_t>& buckets) :
+                         const std::vector<uint16_t>& buckets,
+                         AstaireGlobalStatistics* global_stats) :
       tap_server(tap_server),
       local_server(local_server),
       buckets(buckets),
-      success(false)
+      success(false),
+      global_stats(global_stats)
     {}
 
     std::string tap_server;
     std::string local_server;
     std::vector<uint16_t> buckets;
     bool success;
+    AstaireGlobalStatistics* global_stats;
   };
 
   void trigger_resync();
@@ -71,6 +77,7 @@ private:
   MemcachedStoreView* _view;
   MemcachedConfigReader* _view_cfg;
   Alarm* _alarm;
+  AstaireGlobalStatistics* _global_stats;
   std::string _self;
 };
 

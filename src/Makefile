@@ -15,6 +15,9 @@ TARGET_SOURCES := memcached_tap_client.cpp \
                   memcached_config.cpp \
                   memcachedstoreview.cpp \
                   memcachedstore.cpp \
+                  astaire_statistics.cpp \
+                  statistic.cpp \
+                  zmq_lvc.cpp \
                   astaire.cpp \
                   signalhandler.cpp \
                   exception_handler.cpp \
