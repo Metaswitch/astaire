@@ -235,12 +235,6 @@ int main(int argc, char** argv)
     AlarmState::clear_all("astaire");
   }
 
-  if (options.magic != "")
-  {
-    do_magic(options);
-    return 0;
-  }
-
   // These values match those in MemcachedStore's constructor
   MemcachedStoreView* view = new MemcachedStoreView(128, 2);
   MemcachedConfigReader* view_cfg =
@@ -250,11 +244,13 @@ int main(int argc, char** argv)
   std::string stats[] = { "astaire_global", "astaire_connections" };
   LastValueCache* lvc = new LastValueCache(2, stats, p.string());
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
+  AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
   Astaire* astaire = new Astaire(view,
                                  view_cfg,
                                  astaire_resync_alarm,
                                  global_stats,
+                                 per_conn_stats,
                                  options.local_memcached_server);
 
   sem_wait(&term_sem);

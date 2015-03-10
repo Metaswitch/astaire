@@ -38,7 +38,6 @@ void Astaire::trigger_resync()
       return;
     }
 
-    // Update stats
     _global_stats->set_total_buckets(owl.size());
 
     CL_ASTAIRE_START_RESYNC.log();
@@ -56,6 +55,7 @@ void Astaire::trigger_resync()
     CL_ASTAIRE_COMPLETE_RESYNC.log();
 
     _global_stats->reset();
+    _per_conn_stats->reset();
   }
 }
 
@@ -153,7 +153,7 @@ void* Astaire::tap_buckets_thread(void *data)
         {
           LOG_DEBUG("ADDing record to local memcached");
           Memcached::AddReq add(mutate->key(),
-                                mutate->vbucket(),
+                                vbucket,
                                 mutate->value());
           local_conn.send(add);
           Memcached::BaseMessage* add_rsp = local_conn.recv();
@@ -164,6 +164,14 @@ void* Astaire::tap_buckets_thread(void *data)
           uint32_t bytes = mutate->to_wire().size();
           tap_data->global_stats->increment_resynced_bytes_count(bytes);
           tap_data->global_stats->increment_bandwidth(bytes);
+
+          tap_data->conn_stats->lock();
+          AstairePerConnectionStatistics::BucketRecord* bucket_stats =
+            tap_data->conn_stats->get_bucket_stats(vbucket);
+          bucket_stats->increment_resynced_keys_count(1);
+          bucket_stats->increment_resynced_bytes_count(bytes);
+          bucket_stats->increment_bandwidth(bytes);
+          tap_data->conn_stats->unlock();
         }
       }
     }
@@ -171,6 +179,14 @@ void* Astaire::tap_buckets_thread(void *data)
     free(msg);
   }
   while (!finished);
+
+  if (tap_data->success)
+  {
+    tap_data->global_stats->set_resynced_bucket_count(tap_data->buckets.size());
+    tap_data->conn_stats->lock();
+    tap_data->conn_stats->set_resynced_bucket_count(tap_data->buckets.size());
+    tap_data->conn_stats->unlock();
+  }
 
   return (void*)tap_data;
 }
@@ -251,7 +267,6 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
              ++bucket_it)
         {
           owl.erase(*bucket_it);
-          _global_stats->increment_resynced_bucket_count(1);
         }
       }
       else
@@ -299,10 +314,16 @@ Astaire::TapList Astaire::calculate_taps(const OutstandingWorkList& owl)
 pthread_t Astaire::perform_single_tap(const std::string& server,
                                       const std::vector<uint16_t>& buckets)
 {
+  _per_conn_stats->lock();
+  AstairePerConnectionStatistics::ConnectionRecord* conn_stat =
+    _per_conn_stats->add_connection(server, buckets);
+  _per_conn_stats->unlock();
+
   TapBucketsThreadData* thread_data = new TapBucketsThreadData(server,
                                                                _self,
                                                                buckets,
-                                                               _global_stats);
+                                                               _global_stats,
+                                                               conn_stat);
   pthread_t thread_id;
   LOG_INFO("Starting TAP of %s", server.c_str());
   int rc = pthread_create(&thread_id, NULL, tap_buckets_thread, (void*)thread_data);
