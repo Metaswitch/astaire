@@ -1,5 +1,6 @@
 #include "memcached_tap_client.hpp"
 #include "astaire.hpp"
+#include "astaire_pd_definitions.hpp"
 #include <algorithm>
 
 // Utility function to search a vector.
@@ -37,7 +38,9 @@ void Astaire::trigger_resync()
       return;
     }
 
+    CL_ASTAIRE_START_RESYNC.log();
     process_worklist(owl);
+    CL_ASTAIRE_COMPLETE_RESYNC.log();
   }
 }
 
@@ -190,6 +193,9 @@ Astaire::OutstandingWorkList Astaire::scaling_worklist()
   return owl;
 }
 
+// The core of Astaire's work.  This function iterates around the OWL,
+// attempting to fetch vbuckets from replicas until either all vbuckets have
+// been successfully synched, or there are no replicas left for a bucket.
 void Astaire::process_worklist(OutstandingWorkList& owl)
 {
   // Since some servers may be unreachable, we loop over the OWL until
@@ -237,6 +243,7 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
   if (!is_owl_valid(owl))
   {
     LOG_ERROR("Failed to stream some buckets");
+    CL_ASTAIRE_RESYNC_FAILED.log();
   }
 }
 

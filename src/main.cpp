@@ -2,6 +2,7 @@
 #include "memcachedstore.h"
 #include "exception_handler.h"
 #include "astaire.hpp"
+#include "astaire_pd_definitions.hpp"
 
 #include <getopt.h>
 #include <boost/filesystem.hpp>
@@ -22,6 +23,7 @@ enum Options
   CLUSTER_SETTINGS_FILE,
   LOG_FILE,
   LOG_LEVEL,
+  HELP,
 };
 
 const static struct option long_opt[] =
@@ -30,10 +32,11 @@ const static struct option long_opt[] =
   {"cluster-settings-file",  required_argument, NULL, CLUSTER_SETTINGS_FILE},
   {"log-file",               required_argument, NULL, LOG_FILE},
   {"log-level",              required_argument, NULL, LOG_LEVEL},
+  {"help",                   no_argument,       NULL, HELP},
   {NULL,                     0,                 NULL, 0},
 };
 
-static std::string options_description = "l:c:H:t:b:p:a:F:L:s:h";
+static std::string options_description = "";
 
 void usage(void)
 {
@@ -82,6 +85,7 @@ int init_options(int argc, char**argv, struct options& options)
   int long_opt_ind;
 
   optind = 0;
+  opterr = 0;
   while ((opt = getopt_long(argc, argv, options_description.c_str(), long_opt, &long_opt_ind)) != -1)
   {
     switch (opt)
@@ -94,10 +98,22 @@ int init_options(int argc, char**argv, struct options& options)
       options.cluster_settings_file = optarg;
       break;
 
-    default:
-      //CL_ASTAIRE_INVALID_OPTION.log();
-      LOG_ERROR("Unknown option: %d.  Run with --help for options.\n", opt);
+    case HELP:
+      usage();
+      CL_ASTAIRE_ENDED.log();
+      closelog();
+      exit(0);
+
+    case LOG_LEVEL:
+    case LOG_FILE:
+      // Handled already in init_logging_options
       break;
+
+    default:
+      CL_ASTAIRE_INVALID_OPTION.log(argv[optind - 1]);
+      LOG_ERROR("Unknown option: %s.  Run with --help for options.\n",
+                argv[optind - 1]);
+      exit(2);
     }
   }
 
@@ -133,8 +149,8 @@ void signal_handler(int sig)
   // Check if there's a stored jmp_buf on the thread and handle if there is
   exception_handler->handle_exception();
 
-  // CL_ASTAIRE_CRASHED.log(strsignal(sig));
-  // closelog();
+  CL_ASTAIRE_CRASHED.log(strsignal(sig));
+  closelog();
 
   // Dump a core.
   abort();
@@ -154,12 +170,12 @@ int main(int argc, char** argv)
   options.cluster_settings_file = "";
 
   boost::filesystem::path p = argv[0];
-  // openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
-  // CL_ASTAIRE_STARTED.log();
+  openlog(p.filename().c_str(), PDLOG_PID, PDLOG_LOCAL6);
+  CL_ASTAIRE_STARTED.log();
 
   if (init_logging_options(argc, argv, options) != 0)
   {
-    // closelog();
+    closelog();
     return 1;
   }
 
@@ -184,7 +200,7 @@ int main(int argc, char** argv)
 
   if (init_options(argc, argv, options) != 0)
   {
-    //closelog();
+    closelog();
     return 1;
   }
 
@@ -211,12 +227,12 @@ int main(int argc, char** argv)
 
   sem_wait(&term_sem);
 
-  //CL_ASTAIRE_ENDED.log();
+  CL_ASTAIRE_ENDED.log();
   delete astaire;
   delete view_cfg;
   delete view;
 
-  //closelog();
+  closelog();
   signal(SIGTERM, SIG_DFL);
   sem_destroy(&term_sem);
 
