@@ -1,2 +1,3 @@
 build/bin/astaire usr/share/clearwater/bin
+modules/cpp-common/scripts/stats-c/cw_stat usr/share/clearwater/bin
 root/* /
