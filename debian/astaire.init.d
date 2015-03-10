@@ -108,7 +108,11 @@ do_start()
         # enable gdb to dump a parent astaire process's stack
         echo 0 > /proc/sys/kernel/yama/ptrace_scope
         get_settings
-        DAEMON_ARGS="$local_ip"
+        DAEMON_ARGS="--local-name=$local_ip:11211
+                     --cluster-settings-file=/etc/clearwater/cluster_settings
+                     --log-file=$log_directory
+                     --log-level=$log_level
+                     --alarms-enabled"
 
         $namespace_prefix start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
                 || return 2
