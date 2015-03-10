@@ -39,7 +39,17 @@ void Astaire::trigger_resync()
     }
 
     CL_ASTAIRE_START_RESYNC.log();
+    if (_alarm)
+    {
+      _alarm->set();
+    }
+
     process_worklist(owl);
+
+    if (_alarm)
+    {
+      _alarm->clear();
+    }
     CL_ASTAIRE_COMPLETE_RESYNC.log();
   }
 }

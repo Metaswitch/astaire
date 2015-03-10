@@ -14,13 +14,15 @@ TARGET_TEST := astaire_test
 TARGET_SOURCES := memcached_tap_client.cpp \
                   memcached_config.cpp \
                   memcachedstoreview.cpp \
-									astaire.cpp \
-									signalhandler.cpp \
-									exception_handler.cpp \
-									health_checker.cpp \
-									utils.cpp \
-									logger.cpp \
-									log.cpp
+                  memcachedstore.cpp \
+                  astaire.cpp \
+                  signalhandler.cpp \
+                  exception_handler.cpp \
+                  health_checker.cpp \
+                  utils.cpp \
+                  logger.cpp \
+                  log.cpp \
+                  alarm.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -79,9 +81,10 @@ LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
            -lpthread \
            -lsas \
-					 -lboost_filesystem \
-					 -lboost_system \
-					 -lrt
+           -lboost_filesystem \
+           -lboost_system \
+           -lrt \
+           -lzmq
 
 # Test build uses just-built libraries, which may not be installed
 LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib

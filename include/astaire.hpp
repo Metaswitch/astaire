@@ -3,6 +3,7 @@
 
 #include "memcachedstoreview.h"
 #include "updater.h"
+#include "alarm.h"
 
 #include <string>
 #include <vector>
@@ -13,7 +14,12 @@ class Astaire
 public:
   Astaire(MemcachedStoreView* view,
           MemcachedConfigReader* view_cfg,
-          std::string self) : _view(view), _view_cfg(view_cfg), _self(self)
+          Alarm* alarm,
+          std::string self) :
+    _view(view),
+    _view_cfg(view_cfg),
+    _alarm(alarm),
+    _self(self)
   {
     _updater = new Updater<void, Astaire>(this,
                                           std::mem_fun(&Astaire::trigger_resync));
@@ -64,6 +70,7 @@ private:
   Updater<void, Astaire>* _updater;
   MemcachedStoreView* _view;
   MemcachedConfigReader* _view_cfg;
+  Alarm* _alarm;
   std::string _self;
 };
 
