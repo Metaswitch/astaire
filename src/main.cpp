@@ -145,9 +145,6 @@ void signal_handler(int sig)
   signal(SIGABRT, SIG_DFL);
   signal(SIGSEGV, signal_handler);
 
-  sem_init(&term_sem, 0, 0);
-  signal(SIGTERM, terminate_handler);
-
   // Log the signal, along with a backtrace.
   LOG_BACKTRACE("Signal %d caught", sig);
 
@@ -170,6 +167,9 @@ int main(int argc, char** argv)
   // Set up our exception signal handler for asserts and segfaults.
   signal(SIGABRT, signal_handler);
   signal(SIGSEGV, signal_handler);
+
+  sem_init(&term_sem, 0, 0);
+  signal(SIGTERM, terminate_handler);
 
   struct options options;
   options.log_to_file = false;
@@ -260,7 +260,11 @@ int main(int argc, char** argv)
     AlarmReqAgent::get_instance().stop();
   }
 
+  LOG_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
+  delete per_conn_stats;
+  delete global_stats;
+  delete lvc;
   delete astaire;
   delete view_cfg;
   delete view;
