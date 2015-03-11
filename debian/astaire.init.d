@@ -205,7 +205,7 @@ do_wait_sync() {
                 # If we have numeric statistics, display them.
                 if [ "$need_resync" != "" ] &&
                    [ "$resynchronized" != "" ] &&
-                   [ "$(echo $need_resync$resynchronized} | tr -d 0-9)" = "" ]
+                   [ "$(echo $need_resync$resynchronized | tr -d 0-9)" = "" ]
                 then
                        echo -n "($resynchronized/$need_resync)"
                 fi
