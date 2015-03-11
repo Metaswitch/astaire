@@ -207,7 +207,7 @@ do_wait_sync() {
                    [ "$resynchronized" != "" ] &&
                    [ "$(echo $need_resync$resynchronized} | tr -d 0-9)" = "" ]
                 then
-                       echo -n "($need_resync/$resynchronized)..."
+                       echo -n "($resynchronized/$need_resync)"
                 fi
 
                 # Indicate that we're still waiting and sleep for 5s
