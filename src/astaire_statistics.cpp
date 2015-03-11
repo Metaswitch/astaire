@@ -3,8 +3,6 @@
 #include <vector>
 #include <string>
 
-#include <iostream>
-
 void AstaireGlobalStatistics::refreshed()
 {
   std::vector<std::string> values;
@@ -63,6 +61,20 @@ void AstaireGlobalStatistics::reset()
   _bandwidth_raw.store(0);
   _bandwidth = 0;
   refresh(true);
+}
+
+void AstaireGlobalStatistics::thread_func()
+{
+  pthread_mutex_lock(&_refresh_mutex);
+  while (!_terminated)
+  {
+    struct timespec next_refresh;
+    clock_gettime(CLOCK_MONOTONIC, &next_refresh);
+    next_refresh.tv_sec += 1;
+    pthread_cond_timedwait(&_refresh_cond, &_refresh_mutex, &next_refresh);
+    refresh(true);
+  }
+  pthread_mutex_unlock(&_refresh_mutex);
 }
 
 void AstairePerConnectionStatistics::refreshed()

@@ -32,10 +32,45 @@ public:
   AstaireGlobalStatistics(LastValueCache* lvc,
                           uint_fast64_t period_us = DEFAULT_PERIOD_US) :
     StatRecorder(period_us),
+    _refresh_mutex(PTHREAD_MUTEX_INITIALIZER),
+    _terminated(false),
     _statistic("astaire_global", lvc)
   {
+    pthread_condattr_t cond_attr;
+    pthread_condattr_init(&cond_attr);
+    pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+    pthread_cond_init(&_refresh_cond, &cond_attr);
+    pthread_condattr_destroy(&cond_attr);
+
+    int rc = pthread_create(&_refresh_thread,
+                            NULL,
+                            AstaireGlobalStatistics::thread_func,
+                            this);
+    if (rc != 0)
+    {
+      LOG_ERROR("Stats reporter thread creation failed (%d)", rc);
+      LOG_ERROR("Stats will only be reported on change");
+    }
+
     reset();
   };
+
+  virtual ~AstaireGlobalStatistics()
+  {
+    pthread_mutex_lock(&_refresh_mutex);
+    _terminated = true;
+    pthread_cond_signal(&_refresh_cond);
+    pthread_mutex_unlock(&_refresh_mutex);
+    pthread_join(_refresh_thread, NULL);
+  }
+
+  static void* thread_func(void* arg)
+  {
+    AstaireGlobalStatistics* glob_stats = (AstaireGlobalStatistics*)arg;
+    glob_stats->thread_func();
+    return NULL;
+  }
+  void thread_func();
 
   void reset();
 
@@ -50,6 +85,10 @@ private:
   void refreshed();
   void read(uint_fast64_t period_us);
 
+  pthread_t _refresh_thread;
+  pthread_cond_t _refresh_cond;
+  pthread_mutex_t _refresh_mutex;
+  bool _terminated;
   std::atomic_uint_fast64_t _timestamp_us;
   Statistic _statistic;
 };
