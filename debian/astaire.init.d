@@ -189,23 +189,25 @@ do_wait_sync() {
         # needing resync and check if it's 0.  If not, wait for 5s and try again.
         while true
         do
-                # Retrieve the statistics and store them in an array.
-                stats=($(/usr/share/clearwater/bin/cw_stat astaire astaire_global |
-                         egrep "buckets(NeedingResync|Resynchronized)" |
-                         cut -d: -f2))
+                # Retrieve the statistics.
+                stats="`/usr/share/clearwater/bin/cw_stat astaire astaire_global |
+                       egrep 'buckets(NeedingResync|Resynchronized)' |
+                       cut -d: -f2`"
+                need_resync=`echo $stats | cut -d\  -f1`
+                resynchronized=`echo $stats | cut -d\  -f2`
 
                 # If the number of buckets needing resync is 0, we're finished
-                if [ "${stats[0]}" == "0" ]
+                if [ "$need_resync" == "0" ]
                 then
                 	break
                 fi
 
                 # If we have numeric statistics, display them.
-                if [ "${stats[0]}" != "" ] &&
-                   [ "${stats[1]}" != "" ] &&
-                   [ "$(echo ${stats[0]}${stats[1]} | tr -d 0-9)" == "" ]
+                if [ "$need_resync" != "" ] &&
+                   [ "$resynchronized" != "" ] &&
+                   [ "$(echo $need_resync$resynchronized} | tr -d 0-9)" == "" ]
                 then
-                	echo -n (${stats[1]}/${stats[0]})...
+                       echo -n "($need_resync/$resynchronized)..."
                 fi
 
                 # Indicate that we're still waiting and sleep for 5s
