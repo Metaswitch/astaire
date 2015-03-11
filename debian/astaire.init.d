@@ -177,7 +177,7 @@ do_reload() {
         # restarting (for example, when it is sent a SIGHUP),
         # then implement that here.
         #
-        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDILE --name $EXECNAME
+        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
@@ -197,7 +197,7 @@ do_wait_sync() {
                 resynchronized=`echo $stats | cut -d\  -f2`
 
                 # If the number of buckets needing resync is 0, we're finished
-                if [ "$need_resync" == "0" ]
+                if [ "$need_resync" = "0" ]
                 then
                 	break
                 fi
@@ -205,7 +205,7 @@ do_wait_sync() {
                 # If we have numeric statistics, display them.
                 if [ "$need_resync" != "" ] &&
                    [ "$resynchronized" != "" ] &&
-                   [ "$(echo $need_resync$resynchronized} | tr -d 0-9)" == "" ]
+                   [ "$(echo $need_resync$resynchronized} | tr -d 0-9)" = "" ]
                 then
                        echo -n "($need_resync/$resynchronized)..."
                 fi
