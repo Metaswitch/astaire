@@ -242,7 +242,7 @@ int main(int argc, char** argv)
 
   // Create statistics infrastructure.
   std::string stats[] = { "astaire_global", "astaire_connections" };
-  LastValueCache* lvc = new LastValueCache(2, stats, p.string());
+  LastValueCache* lvc = new LastValueCache(2, stats, p.filename().string());
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
