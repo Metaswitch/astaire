@@ -41,12 +41,12 @@ cat > /etc/monit/conf.d/astaire.monit <<EOF
 # Monitor the server's PID file and check its memory usage.
 check process astaire pidfile /var/run/astaire.pid
 
-  start program   = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/sprout start'"
-  stop program    = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/sprout stop'"
-  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/sprout restart'"
+  start program   = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/astaire start'"
+  stop program    = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/astaire stop'"
+  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/astaire restart'"
 
   if memory is greater than 80% for 3 cycles
-     then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/sprout abort-restart'"
+     then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/astaire abort-restart'"
 
   if uptime < 30 seconds
      then exec "/bin/true"
