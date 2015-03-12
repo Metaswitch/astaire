@@ -8,6 +8,10 @@
 #include <stdint.h>
 
 // Macro for defining different statistics within a StatRecorder.
+//
+// Gauge statistics holds values that are reported accurately (e.g. not gathered
+// over a time period and analysed to make a prepared value for reporting) hence
+// we force a refresh whenver they are changed.
 #define GAUGE_STAT(NAME)                                                        \
   public:                                                                       \
     void increment_##NAME(uint32_t delta) { _##NAME.fetch_add(delta);           \
@@ -18,7 +22,10 @@
     void set_##NAME(uint32_t val) { _##NAME.store(val); refresh(true); };       \
   private:                                                                      \
     std::atomic_uint_fast32_t _##NAME
-#define AVERAGE_STAT(NAME)                                                      \
+// Collated statistics are the opposite, they should only trigger reporting when
+// their prepared value has been calculated (e.g. after each time period) hence
+// we don't force the refreshed() call.
+#define COLLATED_STAT(NAME)                                                     \
   public:                                                                       \
     void increment_##NAME(uint32_t delta) { _##NAME##_raw.fetch_add(delta);     \
                                             refresh(false); };                  \
@@ -78,7 +85,7 @@ public:
   GAUGE_STAT(resynced_bucket_count);
   GAUGE_STAT(resynced_keys_count);
   GAUGE_STAT(resynced_bytes_count);
-  AVERAGE_STAT(bandwidth);
+  COLLATED_STAT(bandwidth);
 
 private:
   void refresh(bool force);
@@ -139,7 +146,7 @@ public:
 
     GAUGE_STAT(resynced_keys_count);
     GAUGE_STAT(resynced_bytes_count);
-    AVERAGE_STAT(bandwidth);
+    COLLATED_STAT(bandwidth);
 
 private:
     ConnectionRecord* _parent;
@@ -168,6 +175,8 @@ private:
       {
         _bucket_map[*it] = new BucketRecord(this, *it, _period_us);
       }
+      reset();
+      set_total_buckets(buckets.size());
     };
 
     virtual ~ConnectionRecord()
@@ -221,7 +230,7 @@ private:
 
   pthread_mutex_t _lock;
   uint_fast64_t _period_us;
-  std::map<std::string, ConnectionRecord*> _connection_map;
+  std::vector<ConnectionRecord*> _connections;
   std::atomic_uint_fast64_t _timestamp_us;
   Statistic _statistic;
 };

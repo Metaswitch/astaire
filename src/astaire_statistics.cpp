@@ -21,8 +21,11 @@ void AstaireGlobalStatistics::refresh(bool force)
   uint_fast64_t timestamp_us = _timestamp_us.load();
   uint_fast64_t timestamp_us_now = get_timestamp_us();
 
-  // If we're forced, or this period is already long enough, read the new
-  // values and make the refreshed() callback.
+  // If enough time has passed, read the new values and make the refreshed()
+  // callback.  If we're being forced, call refreshed() anyway.
+  //
+  // If we fail the CAS, someone else has just handled this tick and we can
+  // leave the reporting to them.
   if ((timestamp_us_now >= timestamp_us + _target_period_us) &&
       (_timestamp_us.compare_exchange_weak(timestamp_us, timestamp_us_now)))
   {
@@ -80,11 +83,11 @@ void AstaireGlobalStatistics::thread_func()
 void AstairePerConnectionStatistics::refreshed()
 {
   std::vector<std::string> values;
-  for (std::map<std::string, ConnectionRecord*>::iterator it = _connection_map.begin();
-       it != _connection_map.end();
+  for (std::vector<ConnectionRecord*>::iterator it = _connections.begin();
+       it != _connections.end();
        ++it)
   {
-    it->second->write_out(values);
+    (*it)->write_out(values);
   }
   _statistic.report_change(values);
 }
@@ -112,23 +115,23 @@ void AstairePerConnectionStatistics::refresh(bool force)
 
 void AstairePerConnectionStatistics::read(uint_fast64_t period_us)
 {
-  for (std::map<std::string, ConnectionRecord*>::iterator it = _connection_map.begin();
-       it != _connection_map.end();
+  for (std::vector<ConnectionRecord*>::iterator it = _connections.begin();
+       it != _connections.end();
        ++it)
   {
-    it->second->read(period_us);
+    (*it)->read(period_us);
   }
 }
 
 void AstairePerConnectionStatistics::reset()
 {
-  for (std::map<std::string, ConnectionRecord*>::iterator it = _connection_map.begin();
-       it != _connection_map.end();
+  for (std::vector<ConnectionRecord*>::iterator it = _connections.begin();
+       it != _connections.end();
        ++it)
   {
-    delete it->second;
+    delete (*it);
   }
-  _connection_map.clear();
+  _connections.clear();
   refresh(true);
 }
 
@@ -138,16 +141,20 @@ AstairePerConnectionStatistics::add_connection(std::string server,
 {
   std::string address;
   int port;
-  Utils::split_host_port(server, address, port);
+  if (!Utils::split_host_port(server, address, port))
+  {
+    // Just use the server as the address.
+    address = server;
+    port = 0;
+  }
+
   ConnectionRecord* conn_rec = new ConnectionRecord(this,
                                                     address,
                                                     port,
                                                     buckets,
                                                     &_lock,
                                                     _period_us);
-  conn_rec->reset();
-  conn_rec->set_total_buckets(buckets.size());
-  _connection_map[server] = conn_rec;
+  _connections.push_back(conn_rec);
   return conn_rec;
 }
 
