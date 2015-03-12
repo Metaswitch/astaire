@@ -43,8 +43,8 @@ const static PDLog CL_ASTAIRE_ENDED
   "Astaire ended - Termination signal received - terminating.",
   "Astaire has been terminated by Monit or has exited.",
   "The Astaire service is not longer available.",
-  "(1). This occurs normally when Astaire is stopped. "
-  "(2). If Astaire failed to respond then monit can restart Astaire. "
+    "(1). This occurs normally when Astaire is stopped. "
+    "(2). If Astaire hit an internal error then monit can restart Astaire."
 );
 
 const static PDLog1<const char*> CL_ASTAIRE_CRASHED
@@ -55,7 +55,7 @@ const static PDLog1<const char*> CL_ASTAIRE_CRASHED
   "Astaire has encountered a fatal software error or has been terminated",
   "The application will exit and restart until the problem is fixed.",
   "Ensure that Astaire has been installed correctly and that it "
-  "has valid configuration."
+    "has valid configuration."
 );
 
 const static PDLog CL_ASTAIRE_RESYNC_FAILED
