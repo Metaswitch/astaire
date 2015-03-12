@@ -61,8 +61,14 @@ public:
     AstairePerConnectionStatistics::ConnectionRecord* conn_stats;
   };
 
+  // Kick off a resync operation.  Astaire will automatically calculate the TAPs
+  // required and process them to completion or failure.  This is safe to call
+  // when there's nothing to do.
   void trigger_resync();
 
+  // Static entry point for TAP threads.  The argument must be a valid
+  // TapBucketsThreadData object.  Returns the same object with the `success`
+  // field updated appropriately.
   static void* tap_buckets_thread(void* data);
 
 private:

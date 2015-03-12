@@ -71,6 +71,8 @@ public:
     pthread_join(_refresh_thread, NULL);
   }
 
+  // Entry point to run the global statistic reporting thread.  The `void*`
+  // argument must be a pointer to the owning GlobalStatistics object.
   static void* thread_func(void* arg)
   {
     AstaireGlobalStatistics* glob_stats = (AstaireGlobalStatistics*)arg;
@@ -79,6 +81,7 @@ public:
   }
   void thread_func();
 
+  // Zero all global statistics and report that change.
   void reset();
 
   GAUGE_STAT(total_buckets);
@@ -88,6 +91,7 @@ public:
   COLLATED_STAT(bandwidth);
 
 private:
+  // Standard StatReporter API functions.
   void refresh(bool force);
   void refreshed();
   void read(uint_fast64_t period_us);
@@ -138,10 +142,16 @@ public:
 
     uint16_t bucket_id;
 
+    // All access to this object must be done while the parent ConnectionRecord (or
+    // grandparent PerConnectionStatistics object) are locked.
+
+    // Standard StatReporter API functions.
     void refresh(bool force);
     void refreshed();
     void read(uint_fast64_t period_us);
     void reset();
+
+    // Write the stats for this BucketRecord to the given vector.
     void write_out(std::vector<std::string>& vec);
 
     GAUGE_STAT(resynced_keys_count);
@@ -192,16 +202,42 @@ private:
     std::string address;
     int port;
 
+    // Called whenever a statistic is changed.  May cause statistics to be reported
+    // upstream.
+    //
+    // The ConnectionRecord must be locked to call this function.
     void refresh(bool force);
+
+    // No-op (required to be a StatReporter)
     void refreshed();
+
+    // Zero all the stats for this ConenctionRecords and its child BucketRecords.
+    //
+    // The ConnectionRecord must be locked to call this function.
     void reset();
+
+    // Update any collated stats in this ConnectionRecord or any of its child
+    // BucketRecords.
+    //
+    // The ConnectionRecord must be locked to call this function.
     void read(uint_fast64_t period_us);
+
+    // Write the stats for this ConnectionRecord to the given vector.
+    //
+    // The ConnectionRecord must be locked to call this function.
     void write_out(std::vector<std::string>& vec);
+
+    // Get the BucketRecord for a given bucket ID.
+    //
+    // The ConnectionRecord must be locked to call this function.  The BucketRecord
+    // may not be accessed after releasing the lock.
     BucketRecord* get_bucket_stats(uint16_t bucket)
     {
       return _bucket_map[bucket];
     }
 
+    // Lock or unlock this stats object and the parent stats object.  Locking
+    // is required around most public functions.
     void lock() { pthread_mutex_lock(_lock); };
     void unlock() { pthread_mutex_unlock(_lock); };
 
@@ -215,12 +251,20 @@ private:
     pthread_mutex_t* _lock;
   };
 
+  // Create a new ConnectionRecord to represent a singe TAP connection.
+  //
+  // The ConnectionRecord must be locked to call this function.
   ConnectionRecord* add_connection(std::string server,
                                    std::vector<uint16_t> buckets);
 
+  // Lock or unlock this stats object.  Locking is required around most public
+  // functions.
   void lock() { pthread_mutex_lock(&_lock); };
   void unlock() { pthread_mutex_unlock(&_lock); };
 
+  // Zero out the statistics and report the new (empty) value.
+  //
+  // The ConnectionRecord must be locked to call this function.
   void reset();
 
 private:
