@@ -39,7 +39,7 @@
 #include "exception_handler.h"
 #include "astaire.hpp"
 #include "astaire_pd_definitions.hpp"
-#include "astaire_statistics.h"
+#include "astaire_statistics.hpp"
 
 #include <getopt.h>
 #include <boost/filesystem.hpp>

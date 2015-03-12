@@ -38,7 +38,7 @@
 #define ASTAIRE_H__
 
 #include "memcachedstoreview.h"
-#include "astaire_statistics.h"
+#include "astaire_statistics.hpp"
 #include "updater.h"
 #include "alarm.h"
 

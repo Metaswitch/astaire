@@ -34,7 +34,7 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
-#include "astaire_statistics.h"
+#include "astaire_statistics.hpp"
 
 #include <vector>
 #include <string>
