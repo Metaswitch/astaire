@@ -18,11 +18,25 @@ If you want to run a large Clearwater deployment (or any large `MemcachedStore`-
 
 Astaire is very easy to use, and integrates into the standard resizing algorithm for a `MemcachedStore`-based cluster:
 
-1. Update the `/etc/clearwater/cluster_settings` file to contain the `servers` and `new_servers` lines (reflecting the old and new member lists).
-2. Reload the `MemcachedStore` (to pick up those changes).
-3. Run `astaire <target host> /etc/clearwater/cluster_settings` on each node in the cluster.  Here `<target host>` is the entry in the `cluster_settings` file that corresponds to the local node.
-4. Update `/etc/clearwater/cluster_settings` file to only list the new `servers` list.
-5. Reload `MemcachedStore` to complete the resize.
+1. Update the `/etc/clearwater/cluster_settings` file to contain the `servers` and `new_servers` lines on each node.
+1. Reload the `MemcachedStore` (to pick up those changes) on each node.
+1. Run `sudo service astaire reload` on each node in the cluster.
+1. Run `sudo service astaire wait-sync` on each node (this will wait until the resynchronization has completed).
+1. Update `/etc/clearwater/cluster_settings` file to only list the new `servers` list.
+1. Reload `MemcachedStore` to complete the resize.
+1. If you were scaling down your cluster, you may destroy the extra nodes safely now.
+
+## SNMP Statistics
+
+Astaire can produce SNMP statistics while it is processing a resynchronization, to enable these statistics, install the `clearwater-snmp-handler-astaire` package and then use your favorite SNMP client to query the Astaire-related statistics listed in (PROJECT-CLEARWATER-MIB)[https://raw.githubusercontent.com/Metaswitch/clearwater-snmp-handlers/master/PROJECT-CLEARWATER-MIB].
+
+By tracking these statistics, an orchestrator can avoid having to rely on `wait-sync` to determine when a resize operation is safe to complete.  To do this, the orchestrator should track the `astaireBucketsNeedingResync` statistic and wait for it to return to 0.  This is effectively what `wait-sync` does under the covers.
+
+## Diagnostics
+
+Astaire will produce standard Clearwater logs in `/var/log/astaire/astaire_current.log` and will produce problem determination logs to syslog in the event of major events occurring.
+
+Astaire can also report certain state changes over SNMP INFORMs.  To see the list of alarms that are currently implemented, see <https://github.com/Metaswitch/cpp-common/blob/master/src/alarmdefinition.cpp>.  To enable alarm generation, add `snmp_ip=<ip address>` to `/etc/clearwater/config` and install `clearwater-snmp-handler-alarm`.  SNMP alarms will then be sent to the provided IP address.
 
 ## Project Clearwater
 
