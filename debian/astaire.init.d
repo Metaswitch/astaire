@@ -40,8 +40,8 @@
 # Required-Stop:     $remote_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Clearwater Bono Node
-# Description:       Clearwater Bono SIP Edge Proxy Node
+# Short-Description: Astaire
+# Description:       Astaire, active resynchronisation for memcached clusters
 ### END INIT INFO
 
 # Author: Mike Evans <mike.evans@metaswitch.com>
@@ -141,7 +141,7 @@ do_stop()
         # needed by services started subsequently.  A last resort is to
         # sleep for some time.
         #start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
-        [ "$?" = 2 ] && return 2
+        #[ "$?" = 2 ] && return 2
         # Many daemons don't delete their pidfiles when they exit.
         rm -f $PIDFILE
         return "$RETVAL"
