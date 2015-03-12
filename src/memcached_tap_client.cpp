@@ -292,14 +292,14 @@ int Memcached::Connection::connect()
   if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
   {
     int err = errno;
-    close(_sock); _sock = -1;
     LOG_ERROR("Failed to connect to %s (%d)",
               _address.c_str(),
               err);
+    ::close(_sock); _sock = -1;
     return err;
   }
 
-  freeaddrinfo(ai); ai = NULL;
+  ::freeaddrinfo(ai); ai = NULL;
 
   return 0;
 }
@@ -308,13 +308,13 @@ void Memcached::Connection::disconnect()
 {
   if (_sock > 0)
   {
-    close(_sock); _sock = -1;
+    ::close(_sock); _sock = -1;
   }
 }
 
 bool Memcached::Connection::send(const Memcached::BaseMessage& req)
 {
-  if (_sock == -1)
+  if (_sock < 0)
   {
     return false;
   }
@@ -324,26 +324,26 @@ bool Memcached::Connection::send(const Memcached::BaseMessage& req)
   // Send the command
   if (::send(_sock, bin.data(), bin.length(), 0) < 0)
   {
-    close(_sock); _sock = -1;
-    perror("send():");
+    int err = errno;
+    LOG_ERROR("Error during send() on socket (%d)", err);
+    ::close(_sock); _sock = -1;
     return false;
   }
   return true;
 }
 
-Memcached::BaseMessage* Memcached::Connection::recv()
+Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
 {
   if (_sock == -1)
   {
-    return NULL;
+    return Memcached::Status::Disconnected;
   }
 
   static const int BUFLEN = 128;
   char buf[BUFLEN];
-  Memcached::BaseMessage* msg = NULL;
   ssize_t recv_size = 0;
 
-  bool finished = Memcached::from_wire(_buffer, msg);
+  bool finished = Memcached::from_wire(_buffer, *msg);
   while (!finished)
   {
     recv_size = ::recv(_sock, buf, BUFLEN, 0);
@@ -351,21 +351,22 @@ Memcached::BaseMessage* Memcached::Connection::recv()
     if (recv_size > 0)
     {
       _buffer.append(buf, recv_size);
-      finished = Memcached::from_wire(_buffer, msg);
+      finished = Memcached::from_wire(_buffer, *msg);
     }
     else if (recv_size == 0)
     {
-      fprintf(stderr, "Socket closed by peer\n");
-      close(_sock); _sock = -1;
-      return NULL;
+      LOG_DEBUG("Socket closed by peer");
+      ::close(_sock); _sock = -1;
+      return Memcached::Status::Disconnected;
     }
     else
     {
-      perror("recv():");
-      close(_sock); _sock = -1;
-      return NULL;
+      int err = errno;
+      LOG_ERROR("Error during recv() on socket (%d)", err);
+      ::close(_sock); _sock = -1;
+      return Memcached::Status::Error;
     }
   }
 
-  return msg;
+  return Memcached::Status::Ok;
 }

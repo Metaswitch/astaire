@@ -63,6 +63,13 @@ namespace Memcached
     DEAD = 0x04
   };
 
+  enum struct Status
+  {
+    Ok,
+    Disconnected,
+    Error,
+  };
+
   /* Binary structure of the fixed-length header for Memcached messages */
   struct MsgHdr
   {
@@ -237,7 +244,7 @@ namespace Memcached
     void disconnect();
 
     bool send(const BaseMessage& msg);
-    BaseMessage* recv();
+    Status recv(BaseMessage** msg);
 
   private:
     const std::string _address;

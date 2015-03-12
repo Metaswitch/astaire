@@ -69,8 +69,9 @@ private:
   OutstandingWorkList scaling_worklist();
   void process_worklist(OutstandingWorkList& owl);
   TapList calculate_taps(const OutstandingWorkList& owl);
-  pthread_t perform_single_tap(const std::string& server,
-                               const std::vector<uint16_t>& buckets);
+  bool perform_single_tap(const std::string& server,
+                          const std::vector<uint16_t>& buckets,
+                          pthread_t* handle);
   bool complete_single_tap(pthread_t thread_id,
                            std::string& tap_server);
   void blacklist_server(OutstandingWorkList& owl, const std::string& server);

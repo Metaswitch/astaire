@@ -7,11 +7,7 @@
 template<class T>
 bool is_in_vector(const std::vector<T>& vec, const T& item)
 {
-  if (std::find(vec.begin(), vec.end(), item) == vec.end())
-  {
-    return false;
-  }
-  return true;
+  return (!(std::find(vec.begin(), vec.end(), item) == vec.end()));
 }
 
 /*****************************************************************************/
@@ -107,17 +103,24 @@ void* Astaire::tap_buckets_thread(void *data)
   bool finished = false;
   do
   {
-    Memcached::BaseMessage* msg = tap_conn.recv();
-    if (msg == NULL)
+    Memcached::BaseMessage* msg;
+    Memcached::Status status = tap_conn.recv(&msg);
+    if (status == Memcached::Status::Error)
+    {
+      tap_data->success = false;
+      finished = true;
+      break;
+    }
+    else if (status == Memcached::Status::Disconnected)
     {
       finished = true;
-      continue;
+      break;
     }
 
     if (msg->is_response())
     {
       Memcached::BaseRsp* rsp = (Memcached::BaseRsp*)msg;
-      if (rsp->op_code() == 0x40) // TAP_CONNECT
+      if (rsp->op_code() == (uint8_t)Memcached::OpCode::TAP_CONNECT)
       {
         // TAP_CONNECT should not be replied to, if it has, it is to
         // say that the message was not understood.
@@ -131,16 +134,17 @@ void* Astaire::tap_buckets_thread(void *data)
     {
       Memcached::BaseReq* req = (Memcached::BaseReq*)msg;
 
-      if (req->op_code() == 0x41) // TAP_MUTATE
+      if (req->op_code() == (uint8_t)Memcached::OpCode::TAP_MUTATE)
       {
         Memcached::TapMutateReq* mutate = (Memcached::TapMutateReq*)req;
+
+        // Ths can be removed once memcached returns vbuckets on
+        // TAP_MUTATE requests
         uint16_t vbucket = vbucket_for_key(mutate->key());
         LOG_DEBUG("Received TAP_MUTATE for key %s from bucket %d",
                   mutate->key().c_str(),
                   vbucket);
 
-        // Ths can be removed once vBucket filtering is done on the Memcached
-        // server.
         std::vector<uint16_t>::iterator iter =
           std::find(tap_data->buckets.begin(),
                     tap_data->buckets.end(),
@@ -156,7 +160,15 @@ void* Astaire::tap_buckets_thread(void *data)
                                 vbucket,
                                 mutate->value());
           local_conn.send(add);
-          Memcached::BaseMessage* add_rsp = local_conn.recv();
+
+          Memcached::BaseMessage* add_rsp;
+          Memcached::Status status = local_conn.recv(&add_rsp);
+          if (status != Memcached::Status::Ok)
+          {
+            LOG_ERROR("Lost connection with local memcached instance");
+            tap_data->success = false;
+            continue;
+          }
           delete add_rsp;
 
           // Update global and local stats
@@ -188,6 +200,10 @@ void* Astaire::tap_buckets_thread(void *data)
     tap_data->conn_stats->unlock();
   }
 
+  // Tidy up
+  local_conn.disconnect();
+  tap_conn.disconnect();
+
   return (void*)tap_data;
 }
 
@@ -202,7 +218,7 @@ void* Astaire::tap_buckets_thread(void *data)
 Astaire::OutstandingWorkList Astaire::scaling_worklist()
 {
   OutstandingWorkList owl;
-  const std::map<int, MemcachedStoreView::ReplicaChange>& changes =
+  const std::map<int, MemcachedStoreView::ReplicaChange> changes =
     _view->calculate_vbucket_moves();
 
   for (std::map<int, MemcachedStoreView::ReplicaChange>::const_iterator it =
@@ -218,7 +234,7 @@ Astaire::OutstandingWorkList Astaire::scaling_worklist()
     }
     else if (!is_in_vector(new_replicas, _self))
     {
-      LOG_DEBUG("Bucket (%d) is not owned by local memcahced", it->first);
+      LOG_DEBUG("Bucket (%d) is not owned by local memcached", it->first);
     }
     else
     {
@@ -247,8 +263,12 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
          ++taps_it)
     {
       // Kick off a TAP on this server.
-      pthread_t handle = perform_single_tap(taps_it->first, taps_it->second);
-      tap_handles.push_back(handle);
+      pthread_t handle;
+      bool rc = perform_single_tap(taps_it->first, taps_it->second, &handle);
+      if (rc)
+      {
+        tap_handles.push_back(handle);
+      }
     }
 
     for (std::vector<pthread_t>::iterator handle_it = tap_handles.begin();
@@ -306,13 +326,12 @@ Astaire::TapList Astaire::calculate_taps(const OutstandingWorkList& owl)
 
 // Kick off a tap of a single server for the given vBuckets.
 //
-// On success, returns the thread_id of the thread being used to process the
+// On success, returns the handle of the thread being used to process the
 // tap.  Calling code can wait for this thread to complete by calling
 // `complete_single_tap`.
-//
-// On failure, returns -1.
-pthread_t Astaire::perform_single_tap(const std::string& server,
-                                      const std::vector<uint16_t>& buckets)
+bool Astaire::perform_single_tap(const std::string& server,
+                                 const std::vector<uint16_t>& buckets,
+                                 pthread_t* handle)
 {
   _per_conn_stats->lock();
   AstairePerConnectionStatistics::ConnectionRecord* conn_stat =
@@ -324,15 +343,14 @@ pthread_t Astaire::perform_single_tap(const std::string& server,
                                                                buckets,
                                                                _global_stats,
                                                                conn_stat);
-  pthread_t thread_id;
   LOG_INFO("Starting TAP of %s", server.c_str());
-  int rc = pthread_create(&thread_id, NULL, tap_buckets_thread, (void*)thread_data);
+  int rc = pthread_create(handle, NULL, tap_buckets_thread, (void*)thread_data);
   if (rc != 0)
   {
     LOG_ERROR("Failed to create TAP thread (%d)", rc);
-    return -1;
+    return false;
   }
-  return thread_id;
+  return true;
 }
 
 // Wait for a single TAP to complete.
