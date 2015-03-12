@@ -11,6 +11,8 @@ Homepage: http://projectclearwater.org/
 
 Package: astaire
 Architecture: any
+Recommends: memcached, clearwater-memcached, clearwater-snmp-handler-astaire
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, libzmq3, astaire-libs
 Suggests: astaire-dbg
 Description: Astaire, active resynchronisation for memcached clusters
 
@@ -18,5 +20,16 @@ Package: astaire-dbg
 Architecture: any
 Section: debug
 Priority: extra
-Depends: astaire (= ${binary:Version}), gdb
+Depends: astaire (= ${binary:Version}), astaire-libs-dbg (= ${binary:Version}), gdb
 Description: Debugging symbols for Astaire
+
+Package: astaire-libs
+Architecture: any
+Description: Libraries for Astaire, active resynchronisation for memcached clusters
+
+Package: astaire-libs-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: astaire-libs (= ${binary:Version}), gdb
+Description: Debugging symbols for Astaire's libraries

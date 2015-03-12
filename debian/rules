@@ -29,3 +29,4 @@ override_dh_auto_install:
 override_dh_shlibdeps:
 override_dh_strip:
 	dh_strip -pastaire --dbg-package=astaire-dbg
+	dh_strip -pastaire-libs --dbg-package=astaire-libs-dbg
