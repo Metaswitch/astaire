@@ -44,7 +44,7 @@
 # Description:       Astaire, active resynchronisation for memcached clusters
 ### END INIT INFO
 
-# Author: Mike Evans <mike.evans@metaswitch.com>
+# Author: Project Clearwater Maintainers <maintainers@projectclearwater.org>
 #
 # Please remove the "Author" lines above and replace them
 # with your own name if you copy and modify this script.
