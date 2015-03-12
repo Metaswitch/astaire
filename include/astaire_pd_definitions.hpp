@@ -63,7 +63,7 @@ const static PDLog CL_ASTAIRE_RESYNC_FAILED
   PDLog::CL_ASTAIRE_ID + 5,
   PDLOG_ERR,
   "Astaire has failed to synchronise some data.",
-  "Astaire was unable to reach all the previous replicas for some vbuckets.",
+  "Astaire was unable to reach all the previous replicas for some data.",
   "Not all data has been resynchronised, completing the scaling action now "
     "may result in loss of data or loss of redundancy",
   "Check the status of the memcached cluster and ensure network connectivity "
@@ -78,7 +78,8 @@ const static PDLog CL_ASTAIRE_START_RESYNC
   "Astaire has detected an on-going cluster resize and is proactively "
     "resynchronising data between cluster members.",
   "Data is being resynced across the Memcached cluster.",
-  "None - Informational"
+  "Wait until the current resync operation has completed before continuing "
+    "with the cluster resize."
 );
 
 const static PDLog CL_ASTAIRE_COMPLETE_RESYNC
@@ -89,6 +90,7 @@ const static PDLog CL_ASTAIRE_COMPLETE_RESYNC
   "Astaire has synchronised all available data to the local node.",
   "The scale operation may be completed once all other Astaire instances have "
     "completed their resync operations.",
-  "None - Informational"
+  "Once all other Astaire instances have completed their resync operations "
+    "you may conrinue the cluster resize"
 );
 #endif
