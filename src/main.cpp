@@ -35,15 +35,15 @@
  */
 
 #include "memcached_tap_client.hpp"
-#include "memcachedstore.h"
 #include "exception_handler.h"
 #include "astaire.hpp"
 #include "astaire_pd_definitions.hpp"
 #include "astaire_statistics.hpp"
+#include "logger.h"
 
+#include <sstream>
 #include <getopt.h>
 #include <boost/filesystem.hpp>
-#include <logger.h>
 
 struct options
 {
