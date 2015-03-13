@@ -51,8 +51,6 @@ TARGET_SOURCES := memcached_tap_client.cpp \
                   zmq_lvc.cpp \
                   astaire.cpp \
                   signalhandler.cpp \
-                  exception_handler.cpp \
-                  health_checker.cpp \
                   utils.cpp \
                   logger.cpp \
                   log.cpp \
