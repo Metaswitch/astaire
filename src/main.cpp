@@ -35,7 +35,6 @@
  */
 
 #include "memcached_tap_client.hpp"
-#include "exception_handler.h"
 #include "astaire.hpp"
 #include "astaire_pd_definitions.hpp"
 #include "astaire_statistics.hpp"
@@ -166,7 +165,6 @@ int init_options(int argc, char**argv, struct options& options)
 }
 
 static sem_t term_sem;
-ExceptionHandler* exception_handler;
 
 // Signal handler that triggers astaire termination.
 void terminate_handler(int /*sig*/)
@@ -187,9 +185,6 @@ void signal_handler(int sig)
   // Ensure the log files are complete - the core file created by abort() below
   // will trigger the log files to be copied to the diags bundle
   LOG_COMMIT();
-
-  // Check if there's a stored jmp_buf on the thread and handle if there is
-  exception_handler->handle_exception();
 
   CL_ASTAIRE_CRASHED.log(strsignal(sig));
   closelog();
