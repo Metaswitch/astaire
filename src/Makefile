@@ -46,7 +46,6 @@ TARGET_TEST := astaire_test
 TARGET_SOURCES := memcached_tap_client.cpp \
                   memcached_config.cpp \
                   memcachedstoreview.cpp \
-                  memcachedstore.cpp \
                   astaire_statistics.cpp \
                   statistic.cpp \
                   zmq_lvc.cpp \
@@ -115,7 +114,6 @@ CPPFLAGS_TEST  += -DUNIT_TEST \
 LDFLAGS += -L${ROOT}/usr/lib
 LDFLAGS += -lmemcached \
            -lpthread \
-           -lsas \
            -lboost_filesystem \
            -lboost_system \
            -lrt \
