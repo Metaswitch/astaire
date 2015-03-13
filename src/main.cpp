@@ -277,6 +277,7 @@ int main(int argc, char** argv)
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
+  // Start Astaire last as this might cause a resync to happen synchronously.
   Astaire* astaire = new Astaire(view,
                                  view_cfg,
                                  astaire_resync_alarm,
