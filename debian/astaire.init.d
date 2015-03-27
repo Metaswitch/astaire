@@ -114,7 +114,7 @@ do_start()
                      --log-level=$log_level
                      --alarms-enabled"
 
-        $namespace_prefix start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME -- $DAEMON_ARGS \
+        $namespace_prefix start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME --nicelevel 10 -- $DAEMON_ARGS \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
         # to handle requests from services started subsequently which depend
@@ -185,29 +185,33 @@ do_reload() {
 # Polls astaire until resynchronization completes
 #
 do_wait_sync() {
+        # Wait for 2s to give Astaire a chance to have updated its statistics.
+        sleep 2
+
         # Query astaire via the 0MQ socket, parse out the number of buckets
         # needing resync and check if it's 0.  If not, wait for 5s and try again.
         while true
         do
                 # Retrieve the statistics.
                 stats="`/usr/share/clearwater/bin/cw_stat astaire astaire_global |
-                       egrep 'buckets(NeedingResync|Resynchronized)' |
+                       egrep '(buckets(NeedingResync|Resynchronized)|entriesResynchronized)' |
                        cut -d: -f2`"
-                need_resync=`echo $stats | cut -d\  -f1`
-                resynchronized=`echo $stats | cut -d\  -f2`
+                bucket_need_resync=`echo $stats | cut -d\  -f1`
+                bucket_resynchronized=`echo $stats | cut -d\  -f2`
+                entry_resynchronized=`echo $stats | cut -d\  -f3`
 
                 # If the number of buckets needing resync is 0, we're finished
-                if [ "$need_resync" = "0" ]
+                if [ "$bucket_need_resync" = "0" ]
                 then
                 	break
                 fi
 
                 # If we have numeric statistics, display them.
-                if [ "$need_resync" != "" ] &&
-                   [ "$resynchronized" != "" ] &&
-                   [ "$(echo $need_resync$resynchronized | tr -d 0-9)" = "" ]
+                if [ "$bucket_need_resync" != "" ] &&
+                   [ "$bucket_resynchronized" != "" ] &&
+                   [ "$(echo $bucket_need_resync$bucket_resynchronized$entry_resynchronized | tr -d 0-9)" = "" ]
                 then
-                       echo -n "($resynchronized/$need_resync)"
+                       echo -n "($entry_resynchronized - $bucket_resynchronized/$bucket_need_resync)"
                 fi
 
                 # Indicate that we're still waiting and sleep for 5s
