@@ -47,7 +47,7 @@
 //
 // Gauge statistics hold values that count up and down and are reported
 // accurately (e.g. not gathered over a time period and analysed to make a
-// prepared value for reporting) hence we force a refresh whenver they are
+// prepared value for reporting) hence we force a refresh whenever they are
 // changed.
 #define GAUGE_STAT(NAME)                                                        \
   public:                                                                       \
