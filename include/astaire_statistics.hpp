@@ -45,9 +45,10 @@
 
 // Macro for defining different statistics within a StatRecorder.
 //
-// Gauge statistics holds values that are reported accurately (e.g. not gathered
-// over a time period and analysed to make a prepared value for reporting) hence
-// we force a refresh whenver they are changed.
+// Gauge statistics hold values that count up and down and are reported
+// accurately (e.g. not gathered over a time period and analysed to make a
+// prepared value for reporting) hence we force a refresh whenever they are
+// changed.
 #define GAUGE_STAT(NAME)                                                        \
   public:                                                                       \
     void increment_##NAME(uint32_t delta) { _##NAME.fetch_add(delta);           \
@@ -58,9 +59,21 @@
     void set_##NAME(uint32_t val) { _##NAME.store(val); refresh(true); };       \
   private:                                                                      \
     std::atomic_uint_fast32_t _##NAME
-// Collated statistics are the opposite, they should only trigger reporting when
-// their prepared value has been calculated (e.g. after each time period) hence
-// we don't force the refreshed() call.
+// Counter statistics hold values that count up as events occur and are reported
+// accurately (e.g. not gathered over a time period and analysed to make a
+// prepared value for reporting).  Since they change frequently, we don't force a
+// refresh.
+#define COUNTER_STAT(NAME)                                                      \
+  public:                                                                       \
+    void increment_##NAME(uint32_t delta) { _##NAME.fetch_add(delta);           \
+                                            refresh(false); };                  \
+    void zero_##NAME() { _##NAME.store(0); refresh(false); };                   \
+    void set_##NAME(uint32_t val) { _##NAME.store(val); refresh(false); };      \
+  private:                                                                      \
+    std::atomic_uint_fast32_t _##NAME
+// Collated statistics should only trigger reporting when their prepared value
+// has been calculated (e.g. after each time period) hence we don't force the
+// refreshed() call.
 #define COLLATED_STAT(NAME)                                                     \
   public:                                                                       \
     void increment_##NAME(uint32_t delta) { _##NAME##_raw.fetch_add(delta);     \
@@ -121,9 +134,9 @@ public:
   void reset();
 
   GAUGE_STAT(total_buckets);
-  GAUGE_STAT(resynced_bucket_count);
-  GAUGE_STAT(resynced_keys_count);
-  GAUGE_STAT(resynced_bytes_count);
+  COUNTER_STAT(resynced_bucket_count);
+  COUNTER_STAT(resynced_keys_count);
+  COUNTER_STAT(resynced_bytes_count);
   COLLATED_STAT(bandwidth);
 
 private:
@@ -190,8 +203,8 @@ public:
     // Write the stats for this BucketRecord to the given vector.
     void write_out(std::vector<std::string>& vec);
 
-    GAUGE_STAT(resynced_keys_count);
-    GAUGE_STAT(resynced_bytes_count);
+    COUNTER_STAT(resynced_keys_count);
+    COUNTER_STAT(resynced_bytes_count);
     COLLATED_STAT(bandwidth);
 
 private:

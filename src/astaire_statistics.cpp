@@ -161,6 +161,7 @@ void AstairePerConnectionStatistics::read(uint_fast64_t period_us)
 
 void AstairePerConnectionStatistics::reset()
 {
+  _timestamp_us.store(get_timestamp_us());
   for (std::vector<ConnectionRecord*>::iterator it = _connections.begin();
        it != _connections.end();
        ++it)

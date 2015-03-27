@@ -85,10 +85,26 @@ namespace Memcached
 
   enum struct OpCode
   {
+    GET = 0x00,
     SET = 0x01,
+    ADD = 0x02,
+    REPLACE = 0x03,
     TAP_CONNECT = 0x40,
     TAP_MUTATE = 0x41,
     SET_VBUCKET = 0x3d
+  };
+
+  enum struct ResultCode
+  {
+    NO_ERROR = 0x0000,
+    KEY_NOT_FOUND = 0x0001,
+    KEY_EXISTS = 0x0002,
+    VALUE_TOO_LARGE = 0x0003,
+    INVALID_ARGUMENTS = 0X0004,
+    ITEM_NOT_STORED = 0X0005,
+    INCR_DECR_ON_NON_NUMERIC_VALUE = 0X0006,
+    UNKNOWN_COMMAND = 0X0081,
+    OUT_OF_MEMORY = 0X0082
   };
 
   enum struct VBucketStatus
@@ -101,9 +117,9 @@ namespace Memcached
 
   enum struct Status
   {
-    Ok,
-    Disconnected,
-    Error,
+    OK,
+    DISCONNECTED,
+    ERROR,
   };
 
   /* Binary structure of the fixed-length header for Memcached messages */
@@ -206,10 +222,35 @@ namespace Memcached
     uint16_t _status;
   };
 
-  class AddReq : public BaseReq
+  class GetReq : public BaseReq
   {
   public:
-    AddReq(std::string key, uint16_t vbucket, std::string value);
+    GetReq(std::string key) : BaseReq((uint8_t)OpCode::GET, key, 0, 0, 0) {}
+  };
+
+  class GetRsp : public BaseRsp
+  {
+  public:
+    GetRsp(const std::string& msg);
+
+    std::string value() const { return _value; };
+    uint32_t flags() const { return _flags; };
+
+  private:
+    std::string _value;
+    uint32_t _flags;
+  };
+
+  class SetAddReplaceReq : public BaseReq
+  {
+  public:
+    SetAddReplaceReq(uint8_t command,
+                     std::string key,
+                     uint16_t vbucket,
+                     std::string value,
+                     uint64_t cas,
+                     uint32_t flags,
+                     uint32_t expiry);
 
   protected:
     std::string generate_extra() const;
@@ -217,13 +258,58 @@ namespace Memcached
 
   private:
     std::string _value;
+    uint32_t _flags;
+    uint32_t _expiry;
   };
 
-  class AddRsp : public BaseRsp
+  class SetAddReplaceRsp : public BaseRsp
   {
   public:
-    AddRsp(const std::string& msg) : BaseRsp(msg) {};
+    SetAddReplaceRsp(const std::string& msg) : BaseRsp(msg) {};
   };
+
+  class SetReq : public SetAddReplaceReq
+  {
+  public:
+    SetReq(std::string key,
+           uint16_t vbucket,
+           std::string value,
+           uint32_t flags,
+           uint32_t expiry) :
+      SetAddReplaceReq((uint8_t)OpCode::SET, key, vbucket, value, 0, flags, expiry)
+    {}
+  };
+
+  typedef SetAddReplaceRsp SetRsp;
+
+  class AddReq : public SetAddReplaceReq
+  {
+  public:
+    AddReq(std::string key,
+           uint16_t vbucket,
+           std::string value,
+           uint32_t flags,
+           uint32_t expiry) :
+      SetAddReplaceReq((uint8_t)OpCode::ADD, key, vbucket, value, 0, flags, expiry)
+    {}
+  };
+
+  typedef SetAddReplaceRsp AddRsp;
+
+  class ReplaceReq : public SetAddReplaceReq
+  {
+  public:
+    ReplaceReq(std::string key,
+               uint16_t vbucket,
+               std::string value,
+               uint64_t cas,
+               uint32_t flags,
+               uint32_t expiry) :
+      SetAddReplaceReq((uint8_t)OpCode::SET, key, vbucket, value, cas, flags, expiry)
+    {}
+  };
+
+  typedef SetAddReplaceRsp ReplaceRsp;
 
   class TapConnectReq : public BaseReq
   {
@@ -244,6 +330,8 @@ namespace Memcached
     TapMutateReq(const std::string& msg);
 
     std::string value() const { return _value; };
+    uint32_t flags() const { return _flags; };
+    uint32_t expiry() const { return _expiry; };
 
   private:
     std::string _value;
