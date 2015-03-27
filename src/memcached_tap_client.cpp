@@ -105,8 +105,7 @@ bool Memcached::from_wire(std::string& msg,
   {
     switch (op_code)
     {
-    case 0x41:
-      // TAP_MUTATE
+    case (uint8_t)OpCode::TAP_MUTATE:
       output = from_wire_int<Memcached::TapMutateReq>(msg);
       break;
     default:
@@ -118,9 +117,14 @@ bool Memcached::from_wire(std::string& msg,
   {
     switch (op_code)
     {
-    case 0x02:
-      // ADD
+    case (uint8_t)OpCode::GET:
+      output = Memcached::from_wire_int<Memcached::GetRsp>(msg);
+      break;
+    case (uint8_t)OpCode::ADD:
       output = Memcached::from_wire_int<Memcached::AddRsp>(msg);
+      break;
+    case (uint8_t)OpCode::REPLACE:
+      output = Memcached::from_wire_int<Memcached::ReplaceRsp>(msg);
       break;
     default:
       output = Memcached::from_wire_int<Memcached::BaseRsp>(msg);
@@ -183,34 +187,54 @@ Memcached::BaseRsp::BaseRsp(const std::string& msg) : BaseMessage(msg)
   _status = HDR_GET(msg.data(), vbucket_or_status);
 }
 
-Memcached::AddReq::AddReq(std::string key,
-                          uint16_t vbucket,
-                          std::string value) :
-  BaseReq(0x02, // ADD
+Memcached::GetRsp::GetRsp(const std::string& msg) : BaseRsp(msg)
+{
+  const char* raw = msg.data();
+  uint16_t key_length = HDR_GET(raw, key_length);
+  uint8_t extra_length = HDR_GET(raw, extra_length);
+  uint32_t body_length = HDR_GET(raw, body_length);
+  raw = NULL; // It's now safe to call non-const functions on `msg`
+
+  // The extra section just contains the flags.
+  std::string extra = msg.substr(sizeof(MsgHdr), extra_length);
+  _flags = Utils::network_to_host(((uint32_t*)extra.data())[0]);
+  _value = msg.substr(sizeof(MsgHdr) + extra_length + key_length, body_length - (extra_length + key_length));
+}
+
+Memcached::SetAddReplaceReq::SetAddReplaceReq(uint8_t command,
+                                              std::string key,
+                                              uint16_t vbucket,
+                                              std::string value,
+                                              uint64_t cas,
+                                              uint32_t flags,
+                                              uint32_t expiry) :
+  BaseReq(command,
           key,
           vbucket,
           0,
-          0
+          cas
          ),
-  _value(value)
+  _value(value),
+  _flags(flags),
+  _expiry(expiry)
 {
 }
 
-std::string Memcached::AddReq::generate_extra() const
+std::string Memcached::SetAddReplaceReq::generate_extra() const
 {
   std::string ss;
-  Utils::write((uint32_t)0x00000000, ss); // Flags
-  Utils::write((uint32_t)0x00000000, ss); // Expiry
+  Utils::write(_flags, ss); // Flags
+  Utils::write(_expiry, ss); // Expiry
   return ss;
 }
 
-std::string Memcached::AddReq::generate_value() const
+std::string Memcached::SetAddReplaceReq::generate_value() const
 {
   return _value;
 }
 
 Memcached::TapConnectReq::TapConnectReq(const VBucketList& buckets) :
-  BaseReq(0x40, // TAP_CONNECT
+  BaseReq((uint8_t)OpCode::TAP_CONNECT,
           "",
           0,
           0,
@@ -258,20 +282,22 @@ Memcached::TapMutateReq::TapMutateReq(const std::string& msg) : BaseReq(msg)
   uint32_t body_length = HDR_GET(raw, body_length);
   raw = NULL; // It's now safe to call non-const functions on `msg`
 
-  // The extra section is the same as for a SET command:
-  //
   // Byte/     0       |       1       |       2       |       3       |
   //    /              |               |               |               |
   //   |0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|0 1 2 3 4 5 6 7|
   //   +---------------+---------------+---------------+---------------+
-  //  0| Flags                                                         |
+  //  0| Engine-specific length        | Tap flags                     |
   //   +---------------+---------------+---------------+---------------+
-  //  4| Expiration                                                    |
+  //  0| TTL           | Reserved                                      |
+  //   +---------------+---------------+---------------+---------------+
+  //  8| Flags                                                         |
+  //   +---------------+---------------+---------------+---------------+
+  // 12| Expiration                                                    |
   //   +---------------+---------------+---------------+---------------+
   //   Total 8 bytes
   std::string extra = msg.substr(sizeof(MsgHdr), extra_length);
-  _flags = Utils::network_to_host(((uint32_t*)extra.data())[0]);
-  _expiry = Utils::network_to_host(((uint32_t*)extra.data())[1]);
+  _flags = Utils::network_to_host(((uint32_t*)extra.data())[2]);
+  _expiry = Utils::network_to_host(((uint32_t*)extra.data())[3]);
   _value = msg.substr(sizeof(MsgHdr) + extra_length + key_length, body_length - (extra_length + key_length));
 }
 
@@ -372,7 +398,7 @@ Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
 {
   if (_sock == -1)
   {
-    return Memcached::Status::Disconnected;
+    return Memcached::Status::DISCONNECTED;
   }
 
   static const int BUFLEN = 128;
@@ -393,16 +419,16 @@ Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
     {
       LOG_DEBUG("Socket closed by peer");
       ::close(_sock); _sock = -1;
-      return Memcached::Status::Disconnected;
+      return Memcached::Status::DISCONNECTED;
     }
     else
     {
       int err = errno;
       LOG_ERROR("Error during recv() on socket (%d)", err);
       ::close(_sock); _sock = -1;
-      return Memcached::Status::Error;
+      return Memcached::Status::ERROR;
     }
   }
 
-  return Memcached::Status::Ok;
+  return Memcached::Status::OK;
 }

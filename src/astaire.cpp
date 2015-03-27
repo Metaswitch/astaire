@@ -141,13 +141,13 @@ void* Astaire::tap_buckets_thread(void *data)
   {
     Memcached::BaseMessage* msg;
     Memcached::Status status = tap_conn.recv(&msg);
-    if (status == Memcached::Status::Error)
+    if (status == Memcached::Status::ERROR)
     {
       tap_data->success = false;
       finished = true;
       break;
     }
-    else if (status == Memcached::Status::Disconnected)
+    else if (status == Memcached::Status::DISCONNECTED)
     {
       finished = true;
       break;
@@ -191,21 +191,99 @@ void* Astaire::tap_buckets_thread(void *data)
         }
         else
         {
-          LOG_DEBUG("ADDing record to local memcached");
-          Memcached::AddReq add(mutate->key(),
-                                vbucket,
-                                mutate->value());
-          local_conn.send(add);
+          LOG_DEBUG("GETing record from local memcached");
+          Memcached::GetReq get(mutate->key());
+          local_conn.send(get);
 
-          Memcached::BaseMessage* add_rsp;
-          Memcached::Status status = local_conn.recv(&add_rsp);
-          if (status != Memcached::Status::Ok)
+          Memcached::BaseMessage* base_msg;
+          Memcached::Status status = local_conn.recv(&base_msg);
+          if (status != Memcached::Status::OK)
           {
             LOG_ERROR("Lost connection with local memcached instance");
             tap_data->success = false;
             continue;
           }
-          delete add_rsp;
+
+          // Check this is a Get response and cast it if so.
+          if ((!base_msg->is_response()) ||
+              (base_msg->op_code() != (uint8_t)Memcached::OpCode::GET))
+          {
+            LOG_ERROR("Received unexpected message from local memcached instance (%x)", base_msg->op_code());
+            tap_data->success = false;
+            delete base_msg; base_msg = NULL;
+            continue;
+          }
+          Memcached::GetRsp* get_rsp = (Memcached::GetRsp*)base_msg;
+          base_msg = NULL;
+
+          // Examine Get response to determine whether to Add or Replace the key.
+          bool do_add = false;
+          bool do_replace = false;
+          uint64_t cas = 0;
+          if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::NO_ERROR)
+          {
+            // The flags field encodes a timestamp.  Calculate the difference.
+            // If the timestamp in the Get response is earlier than that in the
+            // Mutate, replace the value stored in the local memcached.
+            if (((int32_t)get_rsp->flags()) - ((int32_t)mutate->flags()) < 0)
+            {
+              do_replace = true;
+              cas = get_rsp->cas();
+            }
+          }
+          else if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::KEY_NOT_FOUND)
+          {
+            do_add = true;
+          }
+          else
+          {
+            LOG_STATUS("Received unexpected Get response result code %x", get_rsp->result_code());
+            tap_data->success = false;
+            delete get_rsp; get_rsp = NULL;
+            continue;
+          }
+          delete get_rsp; get_rsp = NULL;
+
+          // Now actually do the Add or Replace (if required).
+          if (do_add)
+          {
+            Memcached::AddReq add(mutate->key(),
+                                  vbucket,
+                                  mutate->value(),
+                                  mutate->flags(),
+                                  mutate->expiry());
+            local_conn.send(add);
+  
+            Memcached::BaseMessage* add_rsp;
+            Memcached::Status status = local_conn.recv(&add_rsp);
+            if (status != Memcached::Status::OK)
+            {
+              LOG_ERROR("Lost connection with local memcached instance");
+              tap_data->success = false;
+              continue;
+            }
+            delete add_rsp;
+          }
+          else if (do_replace)
+          {
+            Memcached::ReplaceReq replace(mutate->key(),
+                                          vbucket,
+                                          mutate->value(),
+                                          cas,
+                                          mutate->flags(),
+                                          mutate->expiry());
+            local_conn.send(replace);
+
+            Memcached::BaseMessage* replace_rsp;
+            Memcached::Status status = local_conn.recv(&replace_rsp);
+            if (status != Memcached::Status::OK)
+            {
+              LOG_ERROR("Lost connection with local memcached instance");
+              tap_data->success = false;
+              continue;
+            }
+            delete replace_rsp;
+          }
 
           // Update global and local stats
           tap_data->global_stats->increment_resynced_keys_count(1);
@@ -224,7 +302,7 @@ void* Astaire::tap_buckets_thread(void *data)
       }
     }
 
-    free(msg);
+    delete msg; msg = NULL;
   }
   while (!finished);
 
