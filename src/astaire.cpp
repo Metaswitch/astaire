@@ -430,53 +430,41 @@ Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
 // been successfully synched, or there are no replicas left for a bucket.
 void Astaire::process_worklist(OutstandingWorkList& owl)
 {
-  // Since some servers may be unreachable, we loop over the OWL until
-  // we've completely suceeded or cannot make any more progress.
-  while (!owl.empty() && is_owl_valid(owl))
-  {
-    TapList taps = calculate_taps(owl);
-    std::vector<pthread_t> tap_handles;
-    tap_handles.reserve(taps.size());
-    for (TapList::iterator taps_it = taps.begin();
-         taps_it != taps.end();
-         ++taps_it)
-    {
-      // Kick off a TAP on this server.
-      pthread_t handle;
-      bool rc = perform_single_tap(taps_it->first, taps_it->second, &handle);
-      if (rc)
-      {
-        tap_handles.push_back(handle);
-      }
-    }
+  bool success = true;
 
-    for (std::vector<pthread_t>::iterator handle_it = tap_handles.begin();
-         handle_it != tap_handles.end();
-         ++handle_it)
+  TapList taps = calculate_taps(owl);
+  std::vector<pthread_t> tap_handles;
+  tap_handles.reserve(taps.size());
+  for (TapList::iterator taps_it = taps.begin();
+       taps_it != taps.end();
+       ++taps_it)
+  {
+    // Kick off a TAP on this server.
+    pthread_t handle;
+    bool rc = perform_single_tap(taps_it->first, taps_it->second, &handle);
+    if (rc)
     {
-      // Wait for the TAP to complete and update the OWL appropriately.
-      std::string server;
-      bool success = complete_single_tap(*handle_it, server);
-      if (success)
-      {
-        // Clear the tapped buckets from the OWL as they've been successfully
-        // tapped.
-        for (std::vector<uint16_t>::const_iterator bucket_it = taps[server].begin();
-             bucket_it != taps[server].end();
-             ++bucket_it)
-        {
-          owl.erase(*bucket_it);
-        }
-      }
-      else
-      {
-        // Remove this unreachable server from the OWL.
-        blacklist_server(owl, server);
-      }
+      tap_handles.push_back(handle);
     }
   }
 
-  if (!is_owl_valid(owl))
+  for (std::vector<pthread_t>::iterator handle_it = tap_handles.begin();
+       handle_it != tap_handles.end();
+       ++handle_it)
+  {
+    std::string server;
+    if (complete_single_tap(*handle_it, server))
+    {
+      LOG_VERBOSE("Tap of %s completed successfully", server.c_str());
+    }
+    else
+    {
+      LOG_VERBOSE("Tap of %s failed", server.c_str());
+      success = false;
+    }
+  }
+
+  if (success)
   {
     LOG_ERROR("Failed to stream some buckets");
     CL_ASTAIRE_RESYNC_FAILED.log();
@@ -485,19 +473,23 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
 
 // Convert an OWL into a list of TAPs to perform.  This algorithm choses the
 // first available server for each bucket.
-//
-// This function assumes the provided OWL is valid (you can use is_owl_valid to
-// check this).
 Astaire::TapList Astaire::calculate_taps(const OutstandingWorkList& owl)
 {
   TapList tl;
 
-  for (OutstandingWorkList::const_iterator it = owl.begin();
-       it != owl.end();
-       ++it)
+  for (OutstandingWorkList::const_iterator owl_it = owl.begin();
+       owl_it != owl.end();
+       ++owl_it)
   {
-    std::string tapped_server = it->second[0];
-    tl[tapped_server].push_back(it->first);
+    int vbucket = owl_it->first;
+    const std::vector<std::string>& replica_list = owl_it->second;
+
+    for (std::vector<std::string>::const_iterator replica_it = replica_list.begin();
+         replica_it != replica_list.end();
+         ++replica_it)
+    {
+      tl[*replica_it].push_back(vbucket);
+    }
   }
 
   return tl;
@@ -583,22 +575,6 @@ void Astaire::blacklist_server(OutstandingWorkList& owl,
     // a new element in the map (guaranteed safe by C++).
     owl[owl_it->first] = new_server_list;
   }
-}
-
-// Check that the provided OWL is valid (i.e. all buckets have at least one
-// available replica).
-bool Astaire::is_owl_valid(const OutstandingWorkList& owl)
-{
-  for (OutstandingWorkList::const_iterator it = owl.begin();
-       it != owl.end();
-       ++it)
-  {
-    if (it->second.empty())
-    {
-      return false;
-    }
-  }
-  return true;
 }
 
 // Must match the same function in https://github.com/Metaswitch/cpp-common/blob/master/src/memcachedstore.cpp.

@@ -116,7 +116,6 @@ private:
   bool complete_single_tap(pthread_t thread_id,
                            std::string& tap_server);
   void blacklist_server(OutstandingWorkList& owl, const std::string& server);
-  bool is_owl_valid(const OutstandingWorkList& owl);
 
   static uint16_t vbucket_for_key(const std::string& key);
   void handle_resync_triggers();
