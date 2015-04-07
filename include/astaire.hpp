@@ -140,6 +140,11 @@ private:
   // @return - Whether the tagging was successful.
   bool tag_local_memcached();
 
+  // Untag the local memcached (so it is treated as being out-of-date).
+  //
+  // @return - Whether the untagging was successful.
+  bool untag_local_memcached();
+
   // Utility function for doing a request/response cycle to the local
   // memcached.
   //

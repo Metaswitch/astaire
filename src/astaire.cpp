@@ -638,6 +638,10 @@ void Astaire::handle_resync_triggers()
       _full_resync_requested = false;
       resync = true;
       full_resync = true;
+
+      // Mark the local memcached as out-of-date. This means if we crash during
+      // the resync we will restart it when we come back.
+      untag_local_memcached();
     }
 
     PollResult res = poll_local_memcached();
@@ -751,6 +755,11 @@ bool Astaire::tag_local_memcached()
   return local_req_rsp(&set_req, NULL);
 }
 
+bool Astaire::untag_local_memcached()
+{
+  Memcached::DeleteReq del_req(ASTAIRE_TAG_KEY);
+  return local_req_rsp(&del_req, NULL);
+}
 
 bool Astaire::local_req_rsp(Memcached::BaseReq* req,
                             Memcached::BaseRsp** rsp_ptr)
