@@ -100,7 +100,7 @@ const static PDLog CL_ASTAIRE_RESYNC_FAILED
   PDLOG_ERR,
   "Astaire has failed to synchronise some data.",
   "Astaire was unable to reach all the previous replicas for some data.",
-  "Not all data has been resynchronised, completing the scaling action now "
+  "Not all data has been resynchronised. Completing a resize operation now "
     "may result in loss of data or loss of redundancy",
   "Check the status of the memcached cluster and ensure network connectivity "
     "is possible between all nodes."
@@ -111,11 +111,14 @@ const static PDLog CL_ASTAIRE_START_RESYNC
   PDLog::CL_ASTAIRE_ID + 6,
   PDLOG_INFO,
   "Astaire has started a resync operation",
-  "Astaire has detected an on-going cluster resize and is proactively "
-    "resynchronising data between cluster members.",
+  "Astaire is proactively resynchronising data between cluster members."
+    "This could be because:"
+    "(1). Astaire has detected that the cluster is being resized."
+    "(2). Astaire has detected the local Memcached process has been restarted."
+    "(3). An operator has manually triggered a resync.",
   "Data is being resynced across the Memcached cluster.",
   "Wait until the current resync operation has completed before continuing "
-    "with the cluster resize."
+    "with any cluster resize."
 );
 
 const static PDLog CL_ASTAIRE_COMPLETE_RESYNC
@@ -124,9 +127,9 @@ const static PDLog CL_ASTAIRE_COMPLETE_RESYNC
   PDLOG_INFO,
   "Astaire has completed a resync operation",
   "Astaire has synchronised all available data to the local node.",
-  "The scale operation may be completed once all other Astaire instances have "
-    "completed their resync operations.",
-  "Once all other Astaire instances have completed their resync operations "
-    "you may conrinue the cluster resize"
+  "If the cluster is being resized, this operation can be completed once all other "
+    "Astaire instances have completed their resync operations.",
+  "If the cluster is being resized, you may continue the resize operation once "
+    "all other Astaire instances have completed their resync operations."
 );
 #endif
