@@ -91,6 +91,9 @@ public:
   // Reload the cluster config and kick off a new resync operation.
   void reload_config();
 
+  // TODO
+  void trigger_full_resync();
+
   // Static entry point for TAP threads.  The argument must be a valid
   // TapBucketsThreadData object.  Returns the same object with the `success`
   // field updated appropriately.
@@ -119,6 +122,11 @@ private:
 
   static uint16_t vbucket_for_key(const std::string& key);
   void handle_resync_triggers();
+
+  // Update our local copy of the memcached store view.
+  //
+  // @return - Whether the view was updated successfully.
+  bool update_view();
 
   // Poll the local memcached instance to check if it is up-to-date or not
   // (whether it has been running since the last resync completed).
@@ -155,11 +163,14 @@ private:
   pthread_t _control_thread;
   bool _terminated;
 
-  Updater<void, Astaire>* _updater;
+  Updater<void, Astaire>* _sighup_updater;
+  Updater<void, Astaire>* _sigusr1_updater;
 
   bool _view_updated;
   MemcachedStoreView* _view;
   MemcachedConfigReader* _view_cfg;
+
+  bool _full_resync_requested;
 
   Alarm* _alarm;
   AstaireGlobalStatistics* _global_stats;

@@ -61,8 +61,10 @@ Astaire::Astaire(MemcachedStoreView* view,
                  AstairePerConnectionStatistics* per_conn_stats,
                  std::string self) :
   _terminated(false),
+  _view_updated(false),
   _view(view),
   _view_cfg(view_cfg),
+  _full_resync_requested(false),
   _alarm(alarm),
   _global_stats(global_stats),
   _per_conn_stats(per_conn_stats),
@@ -79,14 +81,21 @@ Astaire::Astaire(MemcachedStoreView* view,
   pthread_create(&_control_thread, NULL, control_thread_fn, this);
 
   // Start the updater to handle SIGHUPs
-  _updater = new Updater<void, Astaire>(this,
-                                        std::mem_fun(&Astaire::reload_config));
+  _sighup_updater = new Updater<void, Astaire>(this,
+                                             std::mem_fun(&Astaire::reload_config));
+
+  // Start the updater to handle SIGUSR1s
+#if 0
+  _sigusr1_updater = new Updater<void, Astaire>(this,
+                                                std::mem_fun(&Astaire::trigger_full_resync));
+#endif
 }
 
 Astaire::~Astaire()
 {
-  // Destroy the updater (to stop listening for SIGHUPs).
-  delete _updater; _updater = NULL;
+  // Destroy the updaters (to stop listening for signals).
+  delete _sighup_updater; _sighup_updater = NULL;
+  delete _sigusr1_updater; _sigusr1_updater = NULL;
 
   // Signal the controller thread to terminate.
   pthread_mutex_lock(&_lock);
@@ -103,23 +112,28 @@ Astaire::~Astaire()
 
 void Astaire::reload_config()
 {
-  MemcachedConfig conf;
-
   pthread_mutex_lock(&_lock);
   LOG_DEBUG("Reloading memcached config");
 
-  if (!_view_cfg->read_config(conf))
+  if (!update_view())
   {
-    LOG_ERROR("Invalid cluster settings file");
-  }
-  else
-  {
-    _view->update(conf);
-    _view_updated = true;
-
-    LOG_DEBUG("Signal control thread");
+    LOG_DEBUG("Signal control thread to start a resync");
     pthread_cond_signal(&_cv);
   }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+void Astaire::trigger_full_resync()
+{
+  pthread_mutex_lock(&_lock);
+
+  // We might as well update the store view before we do a full resync.
+  update_view();
+
+  LOG_DEBUG("Signal control thread to start a full resync");
+  _full_resync_requested = true;
+  pthread_cond_signal(&_cv);
 
   pthread_mutex_unlock(&_lock);
 }
@@ -613,10 +627,17 @@ void Astaire::handle_resync_triggers()
 
     if (_view_updated)
     {
-      // The view has been updated. Clear the flag and kick off the resync.
       LOG_DEBUG("View has been updated - resync required");
       _view_updated = false;
       resync = true;
+    }
+
+    if (_full_resync_requested)
+    {
+      LOG_DEBUG("Full resync has been requested");
+      _full_resync_requested = false;
+      resync = true;
+      full_resync = true;
     }
 
     PollResult res = poll_local_memcached();
@@ -773,3 +794,19 @@ bool Astaire::local_req_rsp(Memcached::BaseReq* req,
   }
   return true;
 }
+
+bool Astaire::update_view()
+{
+  MemcachedConfig conf;
+
+  if (!_view_cfg->read_config(conf))
+  {
+    LOG_ERROR("Invalid cluster settings file");
+    return false;
+  }
+
+  _view->update(conf);
+  _view_updated = true;
+  return true;
+}
+
