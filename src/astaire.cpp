@@ -39,6 +39,9 @@
 #include "astaire_pd_definitions.hpp"
 #include <algorithm>
 
+const std::string ASTAIRE_TAG_KEY = "astaire\\tag";
+const std::string ASTAIRE_TAG_VALUE = "{}";
+
 // Utility function to search a vector.
 template<class T>
 bool is_in_vector(const std::vector<T>& vec, const T& item)
@@ -639,3 +642,72 @@ void Astaire::do_resync()
   _per_conn_stats->reset();
 }
 
+// Poll the local memcached to check if it is up-to-date.
+//
+// This makes use of a "tag". This is a record stored in memcached with a well
+// known key. Astaire writes this tag when it completes a resync. If the tag is
+// present it means that memcached has not restarted since the last resync and
+// therefore is up-to-date. If it is missing memcached has restarted and needs
+// to be resynced.
+Astaire::PollResult Astaire::poll_local_memcached()
+{
+  // Create a connection to the local memcached.
+  Memcached::Connection local_conn(_self);
+  int rc = local_conn.connect();
+  if (rc != 0)
+  {
+    LOG_VERBOSE("Failed to connect to local server %s, error was (%d)",
+                _self.c_str(), rc);
+    return ERROR;
+  }
+
+  // Construct and send a GET request for the well-known key.
+  Memcached::GetReq get(ASTAIRE_TAG_KEY);
+  local_conn.send(get);
+
+  // Check we get a GET response back.
+  Memcached::BaseMessage* base_msg = NULL;
+  Memcached::Status status = local_conn.recv(&base_msg);
+  if (status != Memcached::Status::OK)
+  {
+    LOG_VERBOSE("Lost connection with local memcached instance");
+    delete base_msg; base_msg = NULL;
+    return ERROR;
+  }
+
+  if ((!base_msg->is_response()) ||
+      (base_msg->op_code() != (uint8_t)Memcached::OpCode::GET))
+  {
+    LOG_VERBOSE("Received unexpected message from local memcached instance (%x)",
+                base_msg->op_code());
+    delete base_msg; base_msg = NULL;
+    return ERROR;
+  }
+
+  Memcached::GetRsp* get_rsp = (Memcached::GetRsp*)base_msg;
+  base_msg = NULL;
+
+  // Convert the GET response into a PollResult:
+  // -  If the key exists, memcached is up-to-date.
+  // -  If the key is missing, it is out-of-date.
+  // -  All other cases mean that something went wrong.
+  PollResult result;
+  if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::NO_ERROR)
+  {
+    LOG_DEBUG("Found tag - memcached is up-to-date");
+    result = UP_TO_DATE;
+  }
+  else if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::KEY_NOT_FOUND)
+  {
+    LOG_DEBUG("Did not find tag - memcached is out-of-date");
+    result = OUT_OF_DATE;
+  }
+  else
+  {
+    LOG_DEBUG("Memcached returned result code %d", get_rsp->result_code());
+    result = ERROR;
+  }
+
+  delete get_rsp; get_rsp = NULL;
+  return result;
+}

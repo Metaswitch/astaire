@@ -116,6 +116,11 @@ private:
   static uint16_t vbucket_for_key(const std::string& key);
   void handle_resync_triggers();
 
+  // Poll the local memcached instance to check if it is up-to-date or not
+  // (whether it has been running since the last resync completed).
+  enum PollResult { UP_TO_DATE, OUT_OF_DATE, ERROR };
+  PollResult poll_local_memcached();
+
   pthread_mutex_t _lock;
   pthread_cond_t _cv;
 
