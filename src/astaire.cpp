@@ -39,7 +39,8 @@
 #include "astaire_pd_definitions.hpp"
 #include <algorithm>
 
-const std::string ASTAIRE_TAG_KEY = "astaire\\tag";
+const std::string ASTAIRE_KEY_PREFIX = "astaire\\";
+const std::string ASTAIRE_TAG_KEY = ASTAIRE_KEY_PREFIX + "tag";
 const std::string ASTAIRE_TAG_VALUE = "{}";
 
 // Utility function to search a vector.
@@ -226,6 +227,10 @@ void* Astaire::tap_buckets_thread(void *data)
         if (iter == tap_data->buckets.end())
         {
           LOG_DEBUG("Disarding TAP_MUTATE for incorrect vBucket");
+        }
+        else if (mutate->key().find(ASTAIRE_KEY_PREFIX) == 0)
+        {
+          LOG_DEBUG("Disarding TAP_MUTATE for Astaire tag record");
         }
         else
         {
