@@ -120,60 +120,6 @@ void Astaire::reload_config()
   pthread_mutex_unlock(&_lock);
 }
 
-void Astaire::handle_resync_triggers()
-{
-  pthread_mutex_lock(&_lock);
-
-  while (!_terminated)
-  {
-    if (_view_updated)
-    {
-      // The view has been updated. Clear the flag and kick off the resync.
-      _view_updated = false;
-      do_resync();
-    }
-    else
-    {
-      LOG_DEBUG("Wait for view to be updated");
-      pthread_cond_wait(&_cv, &_lock);
-    }
-  }
-
-  pthread_mutex_unlock(&_lock);
-}
-
-// Handles the resynchronisation required given the view of the cluster.
-void Astaire::do_resync()
-{
-  LOG_DEBUG("Start resync operation");
-
-  OutstandingWorkList owl = scaling_worklist();
-  if (owl.empty())
-  {
-    LOG_INFO("No scaling operation in progress, nothing to do");
-    return;
-  }
-
-  _global_stats->set_total_buckets(owl.size());
-
-  CL_ASTAIRE_START_RESYNC.log();
-  if (_alarm)
-  {
-    _alarm->set();
-  }
-
-  process_worklist(owl);
-
-  if (_alarm)
-  {
-    _alarm->clear();
-  }
-  CL_ASTAIRE_COMPLETE_RESYNC.log();
-
-  _global_stats->reset();
-  _per_conn_stats->reset();
-}
-
 /*****************************************************************************/
 /* Static functions                                                          */
 /*****************************************************************************/
@@ -638,3 +584,58 @@ uint16_t Astaire::vbucket_for_key(const std::string& key)
   int vbucket = hash & (128 - 1);
   return vbucket;
 }
+
+void Astaire::handle_resync_triggers()
+{
+  pthread_mutex_lock(&_lock);
+
+  while (!_terminated)
+  {
+    if (_view_updated)
+    {
+      // The view has been updated. Clear the flag and kick off the resync.
+      _view_updated = false;
+      do_resync();
+    }
+    else
+    {
+      LOG_DEBUG("Wait for view to be updated");
+      pthread_cond_wait(&_cv, &_lock);
+    }
+  }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+// Handles the resynchronisation required given the view of the cluster.
+void Astaire::do_resync()
+{
+  LOG_DEBUG("Start resync operation");
+
+  OutstandingWorkList owl = scaling_worklist();
+  if (owl.empty())
+  {
+    LOG_INFO("No scaling operation in progress, nothing to do");
+    return;
+  }
+
+  _global_stats->set_total_buckets(owl.size());
+
+  CL_ASTAIRE_START_RESYNC.log();
+  if (_alarm)
+  {
+    _alarm->set();
+  }
+
+  process_worklist(owl);
+
+  if (_alarm)
+  {
+    _alarm->clear();
+  }
+  CL_ASTAIRE_COMPLETE_RESYNC.log();
+
+  _global_stats->reset();
+  _per_conn_stats->reset();
+}
+
