@@ -177,7 +177,7 @@ do_reload() {
         # restarting (for example, when it is sent a SIGHUP),
         # then implement that here.
         #
-        start-stop-daemon --stop --signal 1 --quiet --pidfile $PIDFILE --name $EXECNAME
+        start-stop-daemon --stop --signal HUP --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
@@ -218,6 +218,12 @@ do_wait_sync() {
                 echo -n ...
                 sleep 5
         done
+        return 0
+}
+
+do_full_resync() {
+        # Send Astaire SIGUSR1 to make it do a full resync.
+        start-stop-daemon --stop --signal USR1 --quiet --pidfile $PIDFILE --name $EXECNAME
         return 0
 }
 
@@ -303,6 +309,10 @@ case "$1" in
   wait-sync)
         log_daemon_msg "Waiting for synchronization - $DESC" "$NAME"
         do_wait_sync
+        ;;
+  full-resync)
+        log_daemon_msg "Forcing full resync - $DESC" "$NAME"
+        do_full_resync
         ;;
   *)
         echo "Usage: $SCRIPTNAME {start|stop|status|restart|reload|force-reload|abort-restart|wait-sync}" >&2
