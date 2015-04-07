@@ -363,35 +363,62 @@ void* Astaire::tap_buckets_thread(void *data)
 /* Private functions                                                         */
 /*****************************************************************************/
 
-// Calculate the OWL for handling a scale operation.
+// Calculate the OWL for a resync operation.
 //
-// Builds and returns an OWL from the memcached store view (will be empty if
-// there's no scale operation ongoing).
-Astaire::OutstandingWorkList Astaire::scaling_worklist()
+// This is only non-empty if a scaling operation is in progress, or a full
+// resync is required (because memcached has been restarted or a full-resync has
+// been requested from the operator)
+Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
 {
   OutstandingWorkList owl;
-  const std::map<int, MemcachedStoreView::ReplicaChange> changes =
-    _view->calculate_vbucket_moves();
 
-  for (std::map<int, MemcachedStoreView::ReplicaChange>::const_iterator it =
-         changes.begin();
-       it != changes.end();
+  std::map<int, MemcachedStoreView::ReplicaList> current_replicas =
+    _view->current_replicas();
+  std::map<int, MemcachedStoreView::ReplicaList> new_replicas =
+    _view->new_replicas();
+
+  if (new_replicas.empty())
+  {
+    LOG_DEBUG("No resize in progress - set new replicas equal to current");
+    new_replicas = current_replicas;
+  }
+
+  for (std::map<int, MemcachedStoreView::ReplicaList>::const_iterator it =
+         new_replicas.begin();
+       it != new_replicas.end();
        ++it)
   {
-    const MemcachedStoreView::ReplicaList& old_replicas = it->second.first;
-    const MemcachedStoreView::ReplicaList& new_replicas = it->second.second;
-    if (is_in_vector(old_replicas, _self))
+    int vbucket = it->first;
+
+    if (is_in_vector(it->second, _self))
     {
-      LOG_DEBUG("Bucket (%d) is already owned by local memcached", it->first);
-    }
-    else if (!is_in_vector(new_replicas, _self))
-    {
-      LOG_DEBUG("Bucket (%d) is not owned by local memcached", it->first);
-    }
-    else
-    {
-      LOG_DEBUG("Local memcached is gaining bucket (%d)", it->first);
-      owl[it->first] = old_replicas;
+      // We should own this vbucket. Work out what replicas to stream it from.
+      LOG_DEBUG("%s will own vbucket %d", _self.c_str(), vbucket);
+      MemcachedStoreView::ReplicaList source_replicas = current_replicas[vbucket];
+
+      if (full_resync)
+      {
+        // We are doing a full resync so pretend that this replica does not
+        // already have the vbucket. This will force us to stream it from the
+        // other replicas.
+        MemcachedStoreView::ReplicaList::iterator it =
+          std::find(source_replicas.begin(), source_replicas.end(), _self);
+
+        if (it != source_replicas.end())
+        {
+          LOG_DEBUG("Full resync - remove local server from source replicas");
+          source_replicas.erase(it);
+        }
+      }
+
+      // If we do not already have the vbucket we need to stream from the other
+      // replicas.
+      if (!is_in_vector(source_replicas, _self))
+      {
+        LOG_DEBUG("Stream vbucket %d from %d replicas",
+                  vbucket, source_replicas.size());
+        owl[vbucket] = source_replicas;
+      }
     }
   }
 
@@ -632,7 +659,7 @@ void Astaire::do_resync(bool full_resync)
 {
   LOG_DEBUG("Start resync operation");
 
-  OutstandingWorkList owl = scaling_worklist();
+  OutstandingWorkList owl = calculate_worklist(full_resync);
   if (owl.empty())
   {
     LOG_INFO("No scaling operation in progress, nothing to do");

@@ -97,7 +97,17 @@ public:
   static void* tap_buckets_thread(void* data);
 
 private:
-  OutstandingWorkList scaling_worklist();
+  // Do a resync operation.  Astaire will automatically calculate the TAPs
+  // required and process them to completion or failure.  This is safe to call
+  // when there's nothing to do.
+  //
+  // @param full_resync - Whether to do a full-resync (which streams all
+  //                      buckets into the local memcached from the replicas) or
+  //                      a minimal-resync (which only streams vbuckets that the
+  //                      local memcached does not already own).
+  void do_resync(bool full_resync);
+
+  OutstandingWorkList calculate_worklist(bool full_resync);
   void process_worklist(OutstandingWorkList& owl);
   TapList calculate_taps(const OutstandingWorkList& owl);
   bool perform_single_tap(const std::string& server,
@@ -110,16 +120,6 @@ private:
 
   static uint16_t vbucket_for_key(const std::string& key);
   void handle_resync_triggers();
-
-  // Do a resync operation.  Astaire will automatically calculate the TAPs
-  // required and process them to completion or failure.  This is safe to call
-  // when there's nothing to do.
-  //
-  // @param full_resync - Whether to do a full-resync (which streams all
-  //                      buckets into the local memcached from the replicas) or
-  //                      a minimal-resync (which only streams vbuckets that the
-  //                      local memcached does not already own).
-  void do_resync(bool full_resync);
 
   // Poll the local memcached instance to check if it is up-to-date or not
   // (whether it has been running since the last resync completed).
