@@ -594,15 +594,32 @@ void Astaire::handle_resync_triggers()
 
   while (!_terminated)
   {
+    bool resync = false;
+    bool full_resync = false;
+
     if (_view_updated)
     {
       // The view has been updated. Clear the flag and kick off the resync.
+      LOG_DEBUG("View has been updated - resync required");
       _view_updated = false;
-      do_resync();
+      resync = true;
+    }
+
+    PollResult res = poll_local_memcached();
+    if (res != UP_TO_DATE)
+    {
+      LOG_DEBUG("Local memcached is not up-to-date - full resync required");
+      resync = true;
+      full_resync = true;
+    }
+
+    if (resync)
+    {
+      do_resync(full_resync);
     }
     else
     {
-      LOG_DEBUG("Wait for view to be updated");
+      LOG_DEBUG("Wait for resync trigger");
       pthread_cond_wait(&_cv, &_lock);
     }
   }
@@ -611,7 +628,7 @@ void Astaire::handle_resync_triggers()
 }
 
 // Handles the resynchronisation required given the view of the cluster.
-void Astaire::do_resync()
+void Astaire::do_resync(bool full_resync)
 {
   LOG_DEBUG("Start resync operation");
 
