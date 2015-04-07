@@ -122,8 +122,32 @@ private:
 
   // Poll the local memcached instance to check if it is up-to-date or not
   // (whether it has been running since the last resync completed).
+  //
+  // @return - One of PollResult.
   enum PollResult { UP_TO_DATE, OUT_OF_DATE, ERROR };
   PollResult poll_local_memcached();
+
+  // Tag the local memcached as being up-to-date.
+  //
+  // @return - Whether the tagging was successful.
+  bool tag_local_memcached();
+
+  // Utility function for doing a request/response cycle to the local
+  // memcached.
+  //
+  // @param req     - The request to send. The caller retains ownership.
+  // @param rsp_ptr - (out) The location to store a pointer to the received
+  //                  response. The caller gains ownership of the response and
+  //                  must delete it when they are finished with it. May be NULL
+  //                  meaning the response is not passed out.
+  //
+  // @return        - Whether a response of the right type has been received.
+  //
+  //                  Note that this does not reflect whether the request was
+  //                  actually successful, only whether we got the request to
+  //                  memcached and got a sensible looking response.
+  bool local_req_rsp(Memcached::BaseReq* req,
+                     Memcached::BaseRsp** rsp_ptr);
 
   pthread_mutex_t _lock;
   pthread_cond_t _cv;

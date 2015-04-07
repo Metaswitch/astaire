@@ -466,6 +466,12 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
 
   if (success)
   {
+    // Tag the local memcached to mark it as up-to-date.
+    LOG_VERBOSE("Resync suceeded");
+    tag_local_memcached();
+  }
+  else
+  {
     LOG_ERROR("Failed to stream some buckets");
     CL_ASTAIRE_RESYNC_FAILED.log();
   }
@@ -671,41 +677,16 @@ void Astaire::do_resync(bool full_resync)
 // to be resynced.
 Astaire::PollResult Astaire::poll_local_memcached()
 {
-  // Create a connection to the local memcached.
-  Memcached::Connection local_conn(_self);
-  int rc = local_conn.connect();
-  if (rc != 0)
-  {
-    LOG_VERBOSE("Failed to connect to local server %s, error was (%d)",
-                _self.c_str(), rc);
-    return ERROR;
-  }
-
   // Construct and send a GET request for the well-known key.
-  Memcached::GetReq get(ASTAIRE_TAG_KEY);
-  local_conn.send(get);
+  Memcached::GetReq get_req(ASTAIRE_TAG_KEY);
+  Memcached::BaseRsp* base_rsp;
 
-  // Check we get a GET response back.
-  Memcached::BaseMessage* base_msg = NULL;
-  Memcached::Status status = local_conn.recv(&base_msg);
-  if (status != Memcached::Status::OK)
+  // Send to the local memcached.
+  if (!local_req_rsp(&get_req, &base_rsp))
   {
-    LOG_VERBOSE("Lost connection with local memcached instance");
-    delete base_msg; base_msg = NULL;
     return ERROR;
   }
-
-  if ((!base_msg->is_response()) ||
-      (base_msg->op_code() != (uint8_t)Memcached::OpCode::GET))
-  {
-    LOG_VERBOSE("Received unexpected message from local memcached instance (%x)",
-                base_msg->op_code());
-    delete base_msg; base_msg = NULL;
-    return ERROR;
-  }
-
-  Memcached::GetRsp* get_rsp = (Memcached::GetRsp*)base_msg;
-  base_msg = NULL;
+  Memcached::GetRsp* get_rsp = (Memcached::GetRsp*)base_rsp;
 
   // Convert the GET response into a PollResult:
   // -  If the key exists, memcached is up-to-date.
@@ -730,4 +711,60 @@ Astaire::PollResult Astaire::poll_local_memcached()
 
   delete get_rsp; get_rsp = NULL;
   return result;
+}
+
+// Tag the local memcached to mark it as up-to-date.
+bool Astaire::tag_local_memcached()
+{
+  // Construct and send a GET request for the well-known key.
+  Memcached::SetReq set_req(ASTAIRE_TAG_KEY,
+                            vbucket_for_key(ASTAIRE_TAG_KEY),
+                            ASTAIRE_TAG_VALUE,
+                            0,
+                            0);
+  return local_req_rsp(&set_req, NULL);
+}
+
+
+bool Astaire::local_req_rsp(Memcached::BaseReq* req,
+                            Memcached::BaseRsp** rsp_ptr)
+{
+  // Create a connection to the local memcached.
+  Memcached::Connection local_conn(_self);
+  int rc = local_conn.connect();
+  if (rc != 0)
+  {
+    LOG_VERBOSE("Failed to connect to local server %s, error was (%d)",
+                _self.c_str(), rc);
+    return false;
+  }
+
+  // Send the request on the connection.
+  local_conn.send(*req);
+
+  // Check we get the right response back.
+  Memcached::BaseMessage* base_msg = NULL;
+  Memcached::Status status = local_conn.recv(&base_msg);
+  if (status != Memcached::Status::OK)
+  {
+    LOG_VERBOSE("Lost connection with local memcached instance");
+    delete base_msg; base_msg = NULL;
+    return false;
+  }
+
+  if ((!base_msg->is_response()) ||
+      (base_msg->op_code() != req->op_code()))
+  {
+    LOG_VERBOSE("Received unexpected message from local memcached instance (%x)",
+                base_msg->op_code());
+    delete base_msg; base_msg = NULL;
+    return false;
+  }
+
+  // If the caller cares about the response, give it to them.
+  if (rsp_ptr != NULL)
+  {
+    *rsp_ptr = (Memcached::BaseRsp*)base_msg;
+  }
+  return true;
 }
