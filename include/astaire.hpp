@@ -54,22 +54,9 @@ public:
           Alarm* alarm,
           AstaireGlobalStatistics* global_stats,
           AstairePerConnectionStatistics* per_conn_stats,
-          std::string self) :
-    _view(view),
-    _view_cfg(view_cfg),
-    _alarm(alarm),
-    _global_stats(global_stats),
-    _per_conn_stats(per_conn_stats),
-    _self(self)
-  {
-    _updater = new Updater<void, Astaire>(this,
-                                          std::mem_fun(&Astaire::trigger_resync));
-  };
+          std::string self);
 
-  ~Astaire()
-  {
-    delete _updater;
-  };
+  ~Astaire();
 
   typedef std::map<std::string, std::vector<uint16_t>> TapList;
   typedef std::map<uint16_t, std::vector<std::string>> OutstandingWorkList;
@@ -97,10 +84,17 @@ public:
     AstairePerConnectionStatistics::ConnectionRecord* conn_stats;
   };
 
-  // Kick off a resync operation.  Astaire will automatically calculate the TAPs
+  // Static function called by the control thread (the thread that manages the
+  // work that Astaire does).
+  static void* control_thread_fn(void* data);
+
+  // Reload the cluster config and kick off a new resync operation.
+  void reload_config();
+
+  // Do a resync operation.  Astaire will automatically calculate the TAPs
   // required and process them to completion or failure.  This is safe to call
   // when there's nothing to do.
-  void trigger_resync();
+  void do_resync();
 
   // Static entry point for TAP threads.  The argument must be a valid
   // TapBucketsThreadData object.  Returns the same object with the `success`
@@ -120,13 +114,24 @@ private:
   bool is_owl_valid(const OutstandingWorkList& owl);
 
   static uint16_t vbucket_for_key(const std::string& key);
+  void handle_resync_triggers();
+
+  pthread_mutex_t _lock;
+  pthread_cond_t _cv;
+
+  pthread_t _control_thread;
+  bool _terminated;
 
   Updater<void, Astaire>* _updater;
+
+  bool _view_updated;
   MemcachedStoreView* _view;
   MemcachedConfigReader* _view_cfg;
+
   Alarm* _alarm;
   AstaireGlobalStatistics* _global_stats;
   AstairePerConnectionStatistics* _per_conn_stats;
+
   std::string _self;
 };
 

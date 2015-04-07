@@ -50,50 +50,139 @@ bool is_in_vector(const std::vector<T>& vec, const T& item)
 /* Public functions                                                          */
 /*****************************************************************************/
 
-// Handles the resynchronisation required given the view of the cluster.
-void Astaire::trigger_resync()
+Astaire::Astaire(MemcachedStoreView* view,
+                 MemcachedConfigReader* view_cfg,
+                 Alarm* alarm,
+                 AstaireGlobalStatistics* global_stats,
+                 AstairePerConnectionStatistics* per_conn_stats,
+                 std::string self) :
+  _terminated(false),
+  _view(view),
+  _view_cfg(view_cfg),
+  _alarm(alarm),
+  _global_stats(global_stats),
+  _per_conn_stats(per_conn_stats),
+  _self(self)
+{
+  pthread_mutex_init(&_lock, NULL);
+  pthread_condattr_t cond_attr;
+  pthread_condattr_init(&cond_attr);
+  pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+  pthread_cond_init(&_cv, &cond_attr);
+  pthread_condattr_destroy(&cond_attr);
+
+  // Start the controller thread.
+  pthread_create(&_control_thread, NULL, control_thread_fn, this);
+
+  // Start the updater to handle SIGHUPs
+  _updater = new Updater<void, Astaire>(this,
+                                        std::mem_fun(&Astaire::reload_config));
+}
+
+Astaire::~Astaire()
+{
+  // Destroy the updater (to stop listening for SIGHUPs).
+  delete _updater; _updater = NULL;
+
+  // Signal the controller thread to terminate.
+  pthread_mutex_lock(&_lock);
+  _terminated = true;
+  pthread_cond_signal(&_cv);
+  pthread_mutex_unlock(&_lock);
+
+  // Now wait for the controller to exit.
+  pthread_join(_control_thread, NULL);
+
+  pthread_cond_destroy(&_cv);
+  pthread_mutex_destroy(&_lock);
+}
+
+void Astaire::reload_config()
 {
   MemcachedConfig conf;
+
+  pthread_mutex_lock(&_lock);
+  LOG_DEBUG("Reloading memcached config");
+
   if (!_view_cfg->read_config(conf))
   {
     LOG_ERROR("Invalid cluster settings file");
-    return;
   }
   else
   {
     _view->update(conf);
+    _view_updated = true;
 
-    OutstandingWorkList owl = scaling_worklist();
-    if (owl.empty())
-    {
-      LOG_INFO("No scaling operation in progress, nothing to do");
-      return;
-    }
-
-    _global_stats->set_total_buckets(owl.size());
-
-    CL_ASTAIRE_START_RESYNC.log();
-    if (_alarm)
-    {
-      _alarm->set();
-    }
-
-    process_worklist(owl);
-
-    if (_alarm)
-    {
-      _alarm->clear();
-    }
-    CL_ASTAIRE_COMPLETE_RESYNC.log();
-
-    _global_stats->reset();
-    _per_conn_stats->reset();
+    LOG_DEBUG("Signal control thread");
+    pthread_cond_signal(&_cv);
   }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+void Astaire::handle_resync_triggers()
+{
+  pthread_mutex_lock(&_lock);
+
+  while (!_terminated)
+  {
+    if (_view_updated)
+    {
+      // The view has been updated. Clear the flag and kick off the resync.
+      _view_updated = false;
+      do_resync();
+    }
+    else
+    {
+      LOG_DEBUG("Wait for view to be updated");
+      pthread_cond_wait(&_cv, &_lock);
+    }
+  }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+// Handles the resynchronisation required given the view of the cluster.
+void Astaire::do_resync()
+{
+  LOG_DEBUG("Start resync operation");
+
+  OutstandingWorkList owl = scaling_worklist();
+  if (owl.empty())
+  {
+    LOG_INFO("No scaling operation in progress, nothing to do");
+    return;
+  }
+
+  _global_stats->set_total_buckets(owl.size());
+
+  CL_ASTAIRE_START_RESYNC.log();
+  if (_alarm)
+  {
+    _alarm->set();
+  }
+
+  process_worklist(owl);
+
+  if (_alarm)
+  {
+    _alarm->clear();
+  }
+  CL_ASTAIRE_COMPLETE_RESYNC.log();
+
+  _global_stats->reset();
+  _per_conn_stats->reset();
 }
 
 /*****************************************************************************/
 /* Static functions                                                          */
 /*****************************************************************************/
+
+void* Astaire::control_thread_fn(void* data)
+{
+  ((Astaire*)data)->handle_resync_triggers();
+  return NULL;
+}
 
 // This thread simply performs the TAP specified in the passed object and
 // updates the success flag appropriately.
@@ -253,7 +342,7 @@ void* Astaire::tap_buckets_thread(void *data)
                                   mutate->flags(),
                                   mutate->expiry());
             local_conn.send(add);
-  
+
             Memcached::BaseMessage* add_rsp;
             Memcached::Status status = local_conn.recv(&add_rsp);
             if (status != Memcached::Status::OK)
