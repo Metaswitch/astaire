@@ -658,8 +658,13 @@ void Astaire::handle_resync_triggers()
     }
     else
     {
+      // Wait 10s for a resync trigger. If we don't get one in that time we
+      // wake up and poll memcached again.
       LOG_DEBUG("Wait for resync trigger");
-      pthread_cond_wait(&_cv, &_lock);
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      ts.tv_sec += 10;
+      pthread_cond_timedwait(&_cv, &_lock, &ts);
     }
   }
 
