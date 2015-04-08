@@ -112,7 +112,7 @@ private:
 
   OutstandingWorkList calculate_worklist(bool full_resync);
   void process_worklist(OutstandingWorkList& owl);
-  TapList calculate_taps(const OutstandingWorkList& owl);
+  TapList calculate_taps(OutstandingWorkList& owl);
   bool perform_single_tap(const std::string& server,
                           const std::vector<uint16_t>& buckets,
                           pthread_t* handle);
@@ -123,6 +123,7 @@ private:
   static uint16_t vbucket_for_key(const std::string& key);
   void handle_resync_triggers();
   static int owl_total_buckets(const OutstandingWorkList& owl);
+  static bool owl_empty(const OutstandingWorkList& owl);
 
   // Update our local copy of the memcached store view.
   //

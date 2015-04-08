@@ -38,6 +38,7 @@
 #include "astaire.hpp"
 #include "astaire_pd_definitions.hpp"
 #include <algorithm>
+#include <set>
 
 const std::string ASTAIRE_KEY_PREFIX = "astaire\\";
 const std::string ASTAIRE_TAG_KEY = ASTAIRE_KEY_PREFIX + "tag";
@@ -382,6 +383,93 @@ void* Astaire::tap_buckets_thread(void *data)
 /* Private functions                                                         */
 /*****************************************************************************/
 
+void Astaire::handle_resync_triggers()
+{
+  pthread_mutex_lock(&_lock);
+
+  while (!_terminated)
+  {
+    bool resync = false;
+    bool full_resync = false;
+
+    if (_view_updated)
+    {
+      LOG_DEBUG("View has been updated - resync required");
+      _view_updated = false;
+      resync = true;
+    }
+
+    if (_full_resync_requested)
+    {
+      LOG_DEBUG("Full resync has been requested");
+      _full_resync_requested = false;
+      resync = true;
+      full_resync = true;
+
+      // Mark the local memcached as out-of-date. This means if we crash during
+      // the resync we will restart it when we come back.
+      untag_local_memcached();
+    }
+
+    PollResult res = poll_local_memcached();
+    if (res != UP_TO_DATE)
+    {
+      LOG_DEBUG("Local memcached is not up-to-date - full resync required");
+      resync = true;
+      full_resync = true;
+    }
+
+    if (resync)
+    {
+      do_resync(full_resync);
+    }
+    else
+    {
+      // Wait 10s for a resync trigger. If we don't get one in that time we
+      // wake up and poll memcached again.
+      LOG_DEBUG("Wait for resync trigger");
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      ts.tv_sec += 10;
+      pthread_cond_timedwait(&_cv, &_lock, &ts);
+    }
+  }
+
+  pthread_mutex_unlock(&_lock);
+}
+
+// Handles the resynchronisation required given the view of the cluster.
+void Astaire::do_resync(bool full_resync)
+{
+  LOG_DEBUG("Start resync operation");
+
+  OutstandingWorkList owl = calculate_worklist(full_resync);
+  if (owl.empty())
+  {
+    LOG_INFO("No scaling operation in progress, nothing to do");
+    return;
+  }
+
+  _global_stats->set_total_buckets(owl_total_buckets(owl));
+
+  CL_ASTAIRE_START_RESYNC.log();
+  if (_alarm)
+  {
+    _alarm->set();
+  }
+
+  process_worklist(owl);
+
+  if (_alarm)
+  {
+    _alarm->clear();
+  }
+  CL_ASTAIRE_COMPLETE_RESYNC.log();
+
+  _global_stats->reset();
+  _per_conn_stats->reset();
+}
+
 // Calculate the OWL for a resync operation.
 //
 // This is only non-empty if a scaling operation is in progress, or a full
@@ -449,41 +537,59 @@ Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
 // been successfully synched, or there are no replicas left for a bucket.
 void Astaire::process_worklist(OutstandingWorkList& owl)
 {
-  bool success = true;
-
-  TapList taps = calculate_taps(owl);
-  std::vector<pthread_t> tap_handles;
-  tap_handles.reserve(taps.size());
-  for (TapList::iterator taps_it = taps.begin();
-       taps_it != taps.end();
-       ++taps_it)
+  std::set<int> unstreamed_buckets;
+  for (OutstandingWorkList::const_iterator it = owl.begin();
+       it != owl.end();
+       ++it)
   {
-    // Kick off a TAP on this server.
-    pthread_t handle;
-    bool rc = perform_single_tap(taps_it->first, taps_it->second, &handle);
-    if (rc)
+    unstreamed_buckets.insert(it->first);
+  }
+
+  while (!owl_empty(owl))
+  {
+    TapList taps = calculate_taps(owl);
+    std::vector<pthread_t> tap_handles;
+    tap_handles.reserve(taps.size());
+    for (TapList::iterator taps_it = taps.begin();
+         taps_it != taps.end();
+         ++taps_it)
     {
-      tap_handles.push_back(handle);
+      // Kick off a TAP on this server.
+      pthread_t handle;
+      bool rc = perform_single_tap(taps_it->first, taps_it->second, &handle);
+      if (rc)
+      {
+        tap_handles.push_back(handle);
+      }
+    }
+
+    for (std::vector<pthread_t>::iterator handle_it = tap_handles.begin();
+         handle_it != tap_handles.end();
+         ++handle_it)
+    {
+      std::string server;
+      bool success = complete_single_tap(*handle_it, server);
+
+      if (success)
+      {
+        LOG_VERBOSE("Tap of %s completed successfully", server.c_str());
+
+        for (std::vector<uint16_t>::const_iterator bucket_it = taps[server].begin();
+             bucket_it != taps[server].end();
+             ++bucket_it)
+        {
+          unstreamed_buckets.erase(*bucket_it);
+        }
+      }
+      else
+      {
+        LOG_VERBOSE("Tap of %s failed", server.c_str());
+        blacklist_server(owl, server);
+      }
     }
   }
 
-  for (std::vector<pthread_t>::iterator handle_it = tap_handles.begin();
-       handle_it != tap_handles.end();
-       ++handle_it)
-  {
-    std::string server;
-    if (complete_single_tap(*handle_it, server))
-    {
-      LOG_VERBOSE("Tap of %s completed successfully", server.c_str());
-    }
-    else
-    {
-      LOG_VERBOSE("Tap of %s failed", server.c_str());
-      success = false;
-    }
-  }
-
-  if (success)
+  if (unstreamed_buckets.empty())
   {
     // Tag the local memcached to mark it as up-to-date.
     LOG_VERBOSE("Resync suceeded");
@@ -498,22 +604,22 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
 
 // Convert an OWL into a list of TAPs to perform.  This algorithm choses the
 // first available server for each bucket.
-Astaire::TapList Astaire::calculate_taps(const OutstandingWorkList& owl)
+Astaire::TapList Astaire::calculate_taps(OutstandingWorkList& owl)
 {
   TapList tl;
 
-  for (OutstandingWorkList::const_iterator owl_it = owl.begin();
+  for (OutstandingWorkList::iterator owl_it = owl.begin();
        owl_it != owl.end();
        ++owl_it)
   {
     int vbucket = owl_it->first;
-    const std::vector<std::string>& replica_list = owl_it->second;
+    std::vector<std::string>& replica_list = owl_it->second;
 
-    for (std::vector<std::string>::const_iterator replica_it = replica_list.begin();
-         replica_it != replica_list.end();
-         ++replica_it)
+    if (!replica_list.empty())
     {
-      tl[*replica_it].push_back(vbucket);
+      std::string replica = replica_list[0];
+      tl[replica].push_back(vbucket);
+      replica_list.erase(replica_list.begin());
     }
   }
 
@@ -602,107 +708,6 @@ void Astaire::blacklist_server(OutstandingWorkList& owl,
   }
 }
 
-// Must match the same function in https://github.com/Metaswitch/cpp-common/blob/master/src/memcachedstore.cpp.
-//
-// Should be removed once memcached can supply vbuckets on the TAP protocol.
-#include "libmemcached/memcached.h"
-uint16_t Astaire::vbucket_for_key(const std::string& key)
-{
-  // Hash the key and convert the hash to a vbucket.
-  int hash = memcached_generate_hash_value(key.data(),
-                                           key.length(),
-                                           MEMCACHED_HASH_MD5);
-  int vbucket = hash & (128 - 1);
-  return vbucket;
-}
-
-void Astaire::handle_resync_triggers()
-{
-  pthread_mutex_lock(&_lock);
-
-  while (!_terminated)
-  {
-    bool resync = false;
-    bool full_resync = false;
-
-    if (_view_updated)
-    {
-      LOG_DEBUG("View has been updated - resync required");
-      _view_updated = false;
-      resync = true;
-    }
-
-    if (_full_resync_requested)
-    {
-      LOG_DEBUG("Full resync has been requested");
-      _full_resync_requested = false;
-      resync = true;
-      full_resync = true;
-
-      // Mark the local memcached as out-of-date. This means if we crash during
-      // the resync we will restart it when we come back.
-      untag_local_memcached();
-    }
-
-    PollResult res = poll_local_memcached();
-    if (res != UP_TO_DATE)
-    {
-      LOG_DEBUG("Local memcached is not up-to-date - full resync required");
-      resync = true;
-      full_resync = true;
-    }
-
-    if (resync)
-    {
-      do_resync(full_resync);
-    }
-    else
-    {
-      // Wait 10s for a resync trigger. If we don't get one in that time we
-      // wake up and poll memcached again.
-      LOG_DEBUG("Wait for resync trigger");
-      struct timespec ts;
-      clock_gettime(CLOCK_MONOTONIC, &ts);
-      ts.tv_sec += 10;
-      pthread_cond_timedwait(&_cv, &_lock, &ts);
-    }
-  }
-
-  pthread_mutex_unlock(&_lock);
-}
-
-// Handles the resynchronisation required given the view of the cluster.
-void Astaire::do_resync(bool full_resync)
-{
-  LOG_DEBUG("Start resync operation");
-
-  OutstandingWorkList owl = calculate_worklist(full_resync);
-  if (owl.empty())
-  {
-    LOG_INFO("No scaling operation in progress, nothing to do");
-    return;
-  }
-
-  _global_stats->set_total_buckets(owl_total_buckets(owl));
-
-  CL_ASTAIRE_START_RESYNC.log();
-  if (_alarm)
-  {
-    _alarm->set();
-  }
-
-  process_worklist(owl);
-
-  if (_alarm)
-  {
-    _alarm->clear();
-  }
-  CL_ASTAIRE_COMPLETE_RESYNC.log();
-
-  _global_stats->reset();
-  _per_conn_stats->reset();
-}
-
 int Astaire::owl_total_buckets(const OutstandingWorkList& owl)
 {
   int buckets = 0;
@@ -715,6 +720,34 @@ int Astaire::owl_total_buckets(const OutstandingWorkList& owl)
   }
 
   return buckets;
+}
+
+bool Astaire::owl_empty(const OutstandingWorkList& owl)
+{
+  for (OutstandingWorkList::const_iterator it = owl.begin();
+       it != owl.end();
+       ++it)
+  {
+    if (!it->second.empty())
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Must match the same function in https://github.com/Metaswitch/cpp-common/blob/master/src/memcachedstore.cpp.
+//
+// Should be removed once memcached can supply vbuckets on the TAP protocol.
+#include "libmemcached/memcached.h"
+uint16_t Astaire::vbucket_for_key(const std::string& key)
+{
+  // Hash the key and convert the hash to a vbucket.
+  int hash = memcached_generate_hash_value(key.data(),
+                                           key.length(),
+                                           MEMCACHED_HASH_MD5);
+  int vbucket = hash & (128 - 1);
+  return vbucket;
 }
 
 // Poll the local memcached to check if it is up-to-date.
