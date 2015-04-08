@@ -122,6 +122,7 @@ private:
 
   static uint16_t vbucket_for_key(const std::string& key);
   void handle_resync_triggers();
+  static int owl_total_buckets(const OutstandingWorkList& owl);
 
   // Update our local copy of the memcached store view.
   //

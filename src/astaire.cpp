@@ -683,7 +683,7 @@ void Astaire::do_resync(bool full_resync)
     return;
   }
 
-  _global_stats->set_total_buckets(owl.size());
+  _global_stats->set_total_buckets(owl_total_buckets(owl));
 
   CL_ASTAIRE_START_RESYNC.log();
   if (_alarm)
@@ -701,6 +701,20 @@ void Astaire::do_resync(bool full_resync)
 
   _global_stats->reset();
   _per_conn_stats->reset();
+}
+
+int Astaire::owl_total_buckets(const OutstandingWorkList& owl)
+{
+  int buckets = 0;
+
+  for (OutstandingWorkList::const_iterator it = owl.begin();
+       it != owl.end();
+       ++it)
+  {
+    buckets += it->second.size();
+  }
+
+  return buckets;
 }
 
 // Poll the local memcached to check if it is up-to-date.
