@@ -176,7 +176,7 @@ void Astaire::control_thread()
     }
 
     PollResult res = poll_local_memcached();
-    if (res != UP_TO_DATE)
+    if (res == OUT_OF_DATE)
     {
       LOG_DEBUG("Local memcached is not up-to-date - full resync required");
       resync = true;
