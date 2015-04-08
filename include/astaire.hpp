@@ -46,6 +46,46 @@
 #include <vector>
 #include <map>
 
+// Class that manages resyncing the local memcached node with the rest of the
+// cluster. This makes use of the memcached "tap protocol" to stream records
+// from other memmcached nodes, which Astaire injects into the local node.
+//
+// Threading Model
+// ===============
+//
+// This class makes use of multiple threads to do its work.
+//
+// -  A control thread. This decides when to do a resync, what sort of resync
+//    to do (see below) and what taps to set up. It also handles raising alarms
+//    and PD logs.
+// -  Tap threads. These are spawned by the control thread when doing a resync.
+//    There is one thread per server being tapped.
+// -  An updater thread that handles SIGHUP.  This updates the cluster view and
+//    kicks the control thread to do a partial resync.
+// -  An updater thread that handles SIGUSR1. This updates the cluster view and
+//    kicks the control thread to do a full resync.
+//
+// All member variables of this class are protected by a lock. All member
+// methods (other than the constructor and destructor) must hold this lock
+// before accessing them. The public methods on this class hold the lock for as
+// long as they are executing. The private methods should assume that the lock
+// is held when they are called.
+//
+// The class also contains a condition variable to signal the control thread to
+// do a resync / terminate itself.
+//
+// Types of Resync
+// ===============
+//
+// Astaire can perform two types of resync:
+//
+// -  Minimal. Astaire only injects records in vbuckets that the local node
+//    does not already own. This is used during a resize operation.
+// -  Full. Astaire injects records in all vbuckets the local node should own,
+//    regardless of whether it already owns them. This is used after the local
+//    memcached has restarted (so it has lost all of its data), or when
+//    triggered by user action.
+//
 class Astaire
 {
 public:
@@ -84,14 +124,21 @@ public:
     AstairePerConnectionStatistics::ConnectionRecord* conn_stats;
   };
 
-  // Static function called by the control thread (the thread that manages the
-  // work that Astaire does).
+  // Static function called by the control thread.  This simply calls
+  // the `control_thread` member method.
   static void* control_thread_fn(void* data);
 
-  // Reload the cluster config and kick off a new resync operation.
+  // Method executed by the control thread.
+  void control_thread();
+
+  // Reload the cluster config and kick off a new resync operation.  This is
+  // called when Astaire receives a SIGHUP.
   void reload_config();
 
-  // TODO
+  // Kick the control thread to do a full resync. This is called when Astaire
+  // receives a SIGUSR1.
+  //
+  // This method reloads the cluster config before triggering the resync.
   void trigger_full_resync();
 
   // Static entry point for TAP threads.  The argument must be a valid
@@ -100,16 +147,7 @@ public:
   static void* tap_buckets_thread(void* data);
 
 private:
-  // Do a resync operation.  Astaire will automatically calculate the TAPs
-  // required and process them to completion or failure.  This is safe to call
-  // when there's nothing to do.
-  //
-  // @param full_resync - Whether to do a full-resync (which streams all
-  //                      buckets into the local memcached from the replicas) or
-  //                      a minimal-resync (which only streams vbuckets that the
-  //                      local memcached does not already own).
   void do_resync(bool full_resync);
-
   OutstandingWorkList calculate_worklist(bool full_resync);
   void process_worklist(OutstandingWorkList& owl);
   TapList calculate_taps(OutstandingWorkList& owl);
@@ -119,55 +157,22 @@ private:
   bool complete_single_tap(pthread_t thread_id,
                            std::string& tap_server);
   void blacklist_server(OutstandingWorkList& owl, const std::string& server);
-
-  static uint16_t vbucket_for_key(const std::string& key);
-  void handle_resync_triggers();
   static int owl_total_buckets(const OutstandingWorkList& owl);
   static bool owl_empty(const OutstandingWorkList& owl);
-
-  // Update our local copy of the memcached store view.
-  //
-  // @return - Whether the view was updated successfully.
+  static uint16_t vbucket_for_key(const std::string& key);
   bool update_view();
 
-  // Poll the local memcached instance to check if it is up-to-date or not
-  // (whether it has been running since the last resync completed).
-  //
-  // @return - One of PollResult.
   enum PollResult { UP_TO_DATE, OUT_OF_DATE, ERROR };
   PollResult poll_local_memcached();
-
-  // Tag the local memcached as being up-to-date.
-  //
-  // @return - Whether the tagging was successful.
   bool tag_local_memcached();
-
-  // Untag the local memcached (so it is treated as being out-of-date).
-  //
-  // @return - Whether the untagging was successful.
   bool untag_local_memcached();
-
-  // Utility function for doing a request/response cycle to the local
-  // memcached.
-  //
-  // @param req     - The request to send. The caller retains ownership.
-  // @param rsp_ptr - (out) The location to store a pointer to the received
-  //                  response. The caller gains ownership of the response and
-  //                  must delete it when they are finished with it. May be NULL
-  //                  meaning the response is not passed out.
-  //
-  // @return        - Whether a response of the right type has been received.
-  //
-  //                  Note that this does not reflect whether the request was
-  //                  actually successful, only whether we got the request to
-  //                  memcached and got a sensible looking response.
   bool local_req_rsp(Memcached::BaseReq* req,
                      Memcached::BaseRsp** rsp_ptr);
 
   pthread_mutex_t _lock;
   pthread_cond_t _cv;
 
-  pthread_t _control_thread;
+  pthread_t _control_thread_hdl;
   bool _terminated;
 
   Updater<void, Astaire>* _sighup_updater;
