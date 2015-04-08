@@ -85,11 +85,12 @@ Astaire::Astaire(MemcachedStoreView* view,
   _sighup_updater = new Updater<void, Astaire>(this,
                                                std::mem_fun(&Astaire::reload_config));
 
-  // Start the updater to handle SIGUSR1s
-#if 0
+  // Start the updater to handle SIGUSR1s. Don't run this updater right away,
+  // as this would trigger a full resync whenever Astaire starts up!
   _sigusr1_updater = new Updater<void, Astaire>(this,
-                                                std::mem_fun(&Astaire::trigger_full_resync));
-#endif
+                                                std::mem_fun(&Astaire::trigger_full_resync),
+                                                &_sigusr1_handler,
+                                                false);
 }
 
 Astaire::~Astaire()
