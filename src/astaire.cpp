@@ -187,14 +187,16 @@ void Astaire::control_thread()
     {
       do_resync(full_resync);
     }
-
-    // Wait 10s for the next resync trigger. If we don't get one in that time we
-    // wake up and poll memcached again.
-    LOG_DEBUG("Wait for resync trigger");
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    ts.tv_sec += 10;
-    pthread_cond_timedwait(&_cv, &_lock, &ts);
+    else
+    {
+      // Wait 10s for the next resync trigger. If we don't get one in that time
+      // we wake up and poll memcached again.
+      LOG_DEBUG("Wait for resync trigger");
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      ts.tv_sec += 10;
+      pthread_cond_timedwait(&_cv, &_lock, &ts);
+    }
   }
 
   pthread_mutex_unlock(&_lock);
@@ -611,11 +613,15 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
     }
   }
 
+  // Tag the local memcached to mark it as up-to-date, even if the resync
+  // failed. The most likely cause for a failure is that all the replicas for
+  // some vbuckets are down which means the bucket's data has been lost and
+  // there is no point in trying to resync it again.
+  tag_local_memcached();
+
   if (unstreamed_buckets.empty())
   {
-    // Tag the local memcached to mark it as up-to-date.
     LOG_VERBOSE("Resync suceeded");
-    tag_local_memcached();
   }
   else
   {
