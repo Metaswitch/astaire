@@ -40,7 +40,7 @@
 #include <algorithm>
 #include <set>
 
-const std::string ASTAIRE_KEY_PREFIX = "astaire\\";
+const std::string ASTAIRE_KEY_PREFIX = "astaire\\\\";
 const std::string ASTAIRE_TAG_KEY = ASTAIRE_KEY_PREFIX + "tag";
 const std::string ASTAIRE_TAG_VALUE = "{}";
 
