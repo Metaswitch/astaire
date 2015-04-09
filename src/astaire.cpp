@@ -117,7 +117,7 @@ void Astaire::reload_config()
   pthread_mutex_lock(&_lock);
   LOG_DEBUG("Reloading memcached config");
 
-  if (!update_view())
+  if (update_view())
   {
     LOG_DEBUG("Signal control thread to start a resync");
     pthread_cond_signal(&_cv);
@@ -187,16 +187,14 @@ void Astaire::control_thread()
     {
       do_resync(full_resync);
     }
-    else
-    {
-      // Wait 10s for a resync trigger. If we don't get one in that time we
-      // wake up and poll memcached again.
-      LOG_DEBUG("Wait for resync trigger");
-      struct timespec ts;
-      clock_gettime(CLOCK_MONOTONIC, &ts);
-      ts.tv_sec += 10;
-      pthread_cond_timedwait(&_cv, &_lock, &ts);
-    }
+
+    // Wait 10s for the next resync trigger. If we don't get one in that time we
+    // wake up and poll memcached again.
+    LOG_DEBUG("Wait for resync trigger");
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    ts.tv_sec += 10;
+    pthread_cond_timedwait(&_cv, &_lock, &ts);
   }
 
   pthread_mutex_unlock(&_lock);
@@ -459,7 +457,7 @@ void Astaire::do_resync(bool full_resync)
   OutstandingWorkList owl = calculate_worklist(full_resync);
   if (owl.empty())
   {
-    LOG_INFO("No scaling operation in progress, nothing to do");
+    LOG_INFO("No resyncing required");
     return;
   }
 
