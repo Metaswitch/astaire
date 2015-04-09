@@ -428,7 +428,7 @@ void* Astaire::tap_buckets_thread(void *data)
 
   if (tap_data->success)
   {
-    tap_data->global_stats->set_resynced_bucket_count(tap_data->buckets.size());
+    tap_data->global_stats->increment_resynced_bucket_count(tap_data->buckets.size());
     tap_data->conn_stats->lock();
     tap_data->conn_stats->set_resynced_bucket_count(tap_data->buckets.size());
     tap_data->conn_stats->unlock();
