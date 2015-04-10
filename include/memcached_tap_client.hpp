@@ -89,6 +89,7 @@ namespace Memcached
     SET = 0x01,
     ADD = 0x02,
     REPLACE = 0x03,
+    DELETE = 0x04,
     TAP_CONNECT = 0x40,
     TAP_MUTATE = 0x41,
     SET_VBUCKET = 0x3d
@@ -239,6 +240,18 @@ namespace Memcached
   private:
     std::string _value;
     uint32_t _flags;
+  };
+
+  class DeleteReq : public BaseReq
+  {
+  public:
+    DeleteReq(std::string key) : BaseReq((uint8_t)OpCode::DELETE, key, 0, 0, 0) {}
+  };
+
+  class DeleteRsp : public BaseRsp
+  {
+  public:
+    DeleteRsp(const std::string& msg);
   };
 
   class SetAddReplaceReq : public BaseReq

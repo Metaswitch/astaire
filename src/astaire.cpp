@@ -38,6 +38,11 @@
 #include "astaire.hpp"
 #include "astaire_pd_definitions.hpp"
 #include <algorithm>
+#include <set>
+
+const std::string ASTAIRE_KEY_PREFIX = "astaire\\\\";
+const std::string ASTAIRE_TAG_KEY = ASTAIRE_KEY_PREFIX + "tag";
+const std::string ASTAIRE_TAG_VALUE = "{}";
 
 // Utility function to search a vector.
 template<class T>
@@ -50,50 +55,163 @@ bool is_in_vector(const std::vector<T>& vec, const T& item)
 /* Public functions                                                          */
 /*****************************************************************************/
 
-// Handles the resynchronisation required given the view of the cluster.
-void Astaire::trigger_resync()
+Astaire::Astaire(MemcachedStoreView* view,
+                 MemcachedConfigReader* view_cfg,
+                 Alarm* alarm,
+                 AstaireGlobalStatistics* global_stats,
+                 AstairePerConnectionStatistics* per_conn_stats,
+                 std::string self) :
+  _terminated(false),
+  _view_updated(false),
+  _view(view),
+  _view_cfg(view_cfg),
+  _full_resync_requested(false),
+  _alarm(alarm),
+  _global_stats(global_stats),
+  _per_conn_stats(per_conn_stats),
+  _self(self)
 {
-  MemcachedConfig conf;
-  if (!_view_cfg->read_config(conf))
+  pthread_mutex_init(&_lock, NULL);
+  pthread_condattr_t cond_attr;
+  pthread_condattr_init(&cond_attr);
+  pthread_condattr_setclock(&cond_attr, CLOCK_MONOTONIC);
+  pthread_cond_init(&_cv, &cond_attr);
+  pthread_condattr_destroy(&cond_attr);
+
+  // Start the controller thread.
+  pthread_create(&_control_thread_hdl, NULL, control_thread_fn, this);
+
+  // Start the updater to handle SIGHUPs
+  _sighup_updater = new Updater<void, Astaire>(this,
+                                               std::mem_fun(&Astaire::reload_config));
+
+  // Start the updater to handle SIGUSR1s. Don't run this updater right away,
+  // as this would trigger a full resync whenever Astaire starts up!
+  _sigusr1_updater = new Updater<void, Astaire>(this,
+                                                std::mem_fun(&Astaire::trigger_full_resync),
+                                                &_sigusr1_handler,
+                                                false);
+}
+
+Astaire::~Astaire()
+{
+  // Destroy the updaters (to stop listening for signals).
+  delete _sighup_updater; _sighup_updater = NULL;
+  delete _sigusr1_updater; _sigusr1_updater = NULL;
+
+  // Signal the controller thread to terminate.
+  pthread_mutex_lock(&_lock);
+  _terminated = true;
+  pthread_cond_signal(&_cv);
+  pthread_mutex_unlock(&_lock);
+
+  // Now wait for the controller to exit.
+  pthread_join(_control_thread_hdl, NULL);
+
+  pthread_cond_destroy(&_cv);
+  pthread_mutex_destroy(&_lock);
+}
+
+void Astaire::reload_config()
+{
+  pthread_mutex_lock(&_lock);
+  LOG_DEBUG("Reloading memcached config");
+
+  if (update_view())
   {
-    LOG_ERROR("Invalid cluster settings file");
-    return;
+    LOG_DEBUG("Signal control thread to start a resync");
+    pthread_cond_signal(&_cv);
   }
-  else
+
+  pthread_mutex_unlock(&_lock);
+}
+
+void Astaire::trigger_full_resync()
+{
+  pthread_mutex_lock(&_lock);
+
+  // We might as well update the store view before we do a full resync.
+  update_view();
+
+  LOG_DEBUG("Signal control thread to start a full resync");
+  _full_resync_requested = true;
+  pthread_cond_signal(&_cv);
+
+  pthread_mutex_unlock(&_lock);
+}
+
+// Method executed by the control thread.
+//
+// This runs a loop that continues until the Astaire object is terminated. It
+// checks is a resync is needed and, if so, starts one. A resync is needed if:
+// -  The cluster config has changed.
+// -  The user has forced a full-resync.
+// -  The local memcached node has been restarted.
+void Astaire::control_thread()
+{
+  pthread_mutex_lock(&_lock);
+
+  while (!_terminated)
   {
-    _view->update(conf);
+    bool resync = false;
+    bool full_resync = false;
 
-    OutstandingWorkList owl = scaling_worklist();
-    if (owl.empty())
+    if (_view_updated)
     {
-      LOG_INFO("No scaling operation in progress, nothing to do");
-      return;
+      LOG_DEBUG("View has been updated - resync required");
+      _view_updated = false;
+      resync = true;
     }
 
-    _global_stats->set_total_buckets(owl.size());
-
-    CL_ASTAIRE_START_RESYNC.log();
-    if (_alarm)
+    if (_full_resync_requested)
     {
-      _alarm->set();
+      LOG_DEBUG("Full resync has been requested");
+      _full_resync_requested = false;
+      resync = true;
+      full_resync = true;
+
+      // Mark the local memcached as out-of-date. This means if we crash during
+      // the resync we will restart it when we come back.
+      untag_local_memcached();
     }
 
-    process_worklist(owl);
-
-    if (_alarm)
+    PollResult res = poll_local_memcached();
+    if (res == OUT_OF_DATE)
     {
-      _alarm->clear();
+      LOG_DEBUG("Local memcached is not up-to-date - full resync required");
+      resync = true;
+      full_resync = true;
     }
-    CL_ASTAIRE_COMPLETE_RESYNC.log();
 
-    _global_stats->reset();
-    _per_conn_stats->reset();
+    if (resync)
+    {
+      do_resync(full_resync);
+    }
+    else
+    {
+      // Wait 10s for the next resync trigger. If we don't get one in that time
+      // we wake up and poll memcached again.
+      LOG_DEBUG("Wait for resync trigger");
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC, &ts);
+      ts.tv_sec += 10;
+      pthread_cond_timedwait(&_cv, &_lock, &ts);
+    }
   }
+
+  pthread_mutex_unlock(&_lock);
 }
 
 /*****************************************************************************/
 /* Static functions                                                          */
 /*****************************************************************************/
+
+// Function for the control thread.
+void* Astaire::control_thread_fn(void* data)
+{
+  ((Astaire*)data)->control_thread();
+  return NULL;
+}
 
 // This thread simply performs the TAP specified in the passed object and
 // updates the success flag appropriately.
@@ -189,6 +307,10 @@ void* Astaire::tap_buckets_thread(void *data)
         {
           LOG_DEBUG("Disarding TAP_MUTATE for incorrect vBucket");
         }
+        else if (mutate->key().find(ASTAIRE_KEY_PREFIX) == 0)
+        {
+          LOG_DEBUG("Disarding TAP_MUTATE for Astaire tag record");
+        }
         else
         {
           LOG_DEBUG("GETing record from local memcached");
@@ -253,7 +375,7 @@ void* Astaire::tap_buckets_thread(void *data)
                                   mutate->flags(),
                                   mutate->expiry());
             local_conn.send(add);
-  
+
             Memcached::BaseMessage* add_rsp;
             Memcached::Status status = local_conn.recv(&add_rsp);
             if (status != Memcached::Status::OK)
@@ -308,7 +430,7 @@ void* Astaire::tap_buckets_thread(void *data)
 
   if (tap_data->success)
   {
-    tap_data->global_stats->set_resynced_bucket_count(tap_data->buckets.size());
+    tap_data->global_stats->increment_resynced_bucket_count(tap_data->buckets.size());
     tap_data->conn_stats->lock();
     tap_data->conn_stats->set_resynced_bucket_count(tap_data->buckets.size());
     tap_data->conn_stats->unlock();
@@ -325,35 +447,98 @@ void* Astaire::tap_buckets_thread(void *data)
 /* Private functions                                                         */
 /*****************************************************************************/
 
-// Calculate the OWL for handling a scale operation.
+// Handles the resynchronisation required given the view of the cluster. Astaire
+// will automatically calculate the TAPs required and process them to completion
+// or failure.
 //
-// Builds and returns an OWL from the memcached store view (will be empty if
-// there's no scale operation ongoing).
-Astaire::OutstandingWorkList Astaire::scaling_worklist()
+// @param full_resync - Whether to do a full-resync or a minimal-resync.
+void Astaire::do_resync(bool full_resync)
+{
+  LOG_DEBUG("Start resync operation");
+
+  OutstandingWorkList owl = calculate_worklist(full_resync);
+  if (owl.empty())
+  {
+    LOG_INFO("No resyncing required");
+    return;
+  }
+
+  _global_stats->set_total_buckets(owl_total_buckets(owl));
+
+  CL_ASTAIRE_START_RESYNC.log();
+  if (_alarm)
+  {
+    _alarm->set();
+  }
+
+  process_worklist(owl);
+
+  if (_alarm)
+  {
+    _alarm->clear();
+  }
+  CL_ASTAIRE_COMPLETE_RESYNC.log();
+
+  _global_stats->reset();
+  _per_conn_stats->reset();
+}
+
+// Calculate the OWL for a resync operation.
+//
+// This is only non-empty if a scaling operation is in progress, or a full
+// resync is required (because memcached has been restarted or a full-resync has
+// been requested from the operator)
+Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
 {
   OutstandingWorkList owl;
-  const std::map<int, MemcachedStoreView::ReplicaChange> changes =
-    _view->calculate_vbucket_moves();
 
-  for (std::map<int, MemcachedStoreView::ReplicaChange>::const_iterator it =
-         changes.begin();
-       it != changes.end();
+  std::map<int, MemcachedStoreView::ReplicaList> current_replicas =
+    _view->current_replicas();
+  std::map<int, MemcachedStoreView::ReplicaList> new_replicas =
+    _view->new_replicas();
+
+  if (new_replicas.empty())
+  {
+    LOG_DEBUG("No resize in progress - set new replicas equal to current");
+    new_replicas = current_replicas;
+  }
+
+  for (std::map<int, MemcachedStoreView::ReplicaList>::const_iterator it =
+         new_replicas.begin();
+       it != new_replicas.end();
        ++it)
   {
-    const MemcachedStoreView::ReplicaList& old_replicas = it->second.first;
-    const MemcachedStoreView::ReplicaList& new_replicas = it->second.second;
-    if (is_in_vector(old_replicas, _self))
+    int vbucket = it->first;
+
+    if (is_in_vector(it->second, _self))
     {
-      LOG_DEBUG("Bucket (%d) is already owned by local memcached", it->first);
-    }
-    else if (!is_in_vector(new_replicas, _self))
-    {
-      LOG_DEBUG("Bucket (%d) is not owned by local memcached", it->first);
-    }
-    else
-    {
-      LOG_DEBUG("Local memcached is gaining bucket (%d)", it->first);
-      owl[it->first] = old_replicas;
+      // We should own this vbucket. Work out what replicas to stream it from.
+      LOG_DEBUG("%s will own vbucket %d", _self.c_str(), vbucket);
+      MemcachedStoreView::ReplicaList source_replicas = current_replicas[vbucket];
+
+      if (full_resync)
+      {
+        // We are doing a full resync so pretend that this replica does not
+        // already have the vbucket. This will force us to stream it from the
+        // other replicas.
+        MemcachedStoreView::ReplicaList::iterator it =
+          std::find(source_replicas.begin(), source_replicas.end(), _self);
+
+        if (it != source_replicas.end())
+        {
+          LOG_DEBUG("Full resync - remove local server from source replicas");
+          source_replicas.erase(it);
+        }
+      }
+
+      // If we do not already have the vbucket we need to stream from the other
+      // replicas.
+      if (!is_in_vector(source_replicas, _self))
+      {
+        LOG_DEBUG("Stream vbucket %d from %d replicas",
+                  vbucket, source_replicas.size());
+        owl[vbucket] = source_replicas;
+      }
     }
   }
 
@@ -361,15 +546,31 @@ Astaire::OutstandingWorkList Astaire::scaling_worklist()
 }
 
 // The core of Astaire's work.  This function iterates around the OWL,
-// attempting to fetch vbuckets from replicas until either all vbuckets have
-// been successfully synched, or there are no replicas left for a bucket.
+// attempting to fetch vbuckets from each replica that owns the vbucket.
+//
+// For a given vbucket this function first fetches it from the primary replica,
+// then each backup replica in turn. Fetching from all replicas avoids data
+// loss if one of the replicas has recently restarted (and is missing some
+// records), and processing each replica in turn avoids race conditions that
+// could cause the local node to end up with old data.
 void Astaire::process_worklist(OutstandingWorkList& owl)
 {
-  // Since some servers may be unreachable, we loop over the OWL until
-  // we've completely suceeded or cannot make any more progress.
-  while (!owl.empty() && is_owl_valid(owl))
+  // Create a set of vbuckets that have not be successfully streamed yet. If
+  // this set is not empty at the end of the method, then something has gone
+  // wrong.
+  std::set<int> unstreamed_buckets;
+  for (OutstandingWorkList::const_iterator it = owl.begin();
+       it != owl.end();
+       ++it)
   {
+    unstreamed_buckets.insert(it->first);
+  }
+
+  while (!owl_empty(owl))
+  {
+    // Calculate the taps to establish. This modifies the OWL in place.
     TapList taps = calculate_taps(owl);
+
     std::vector<pthread_t> tap_handles;
     tap_handles.reserve(taps.size());
     for (TapList::iterator taps_it = taps.begin();
@@ -389,29 +590,40 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
          handle_it != tap_handles.end();
          ++handle_it)
     {
-      // Wait for the TAP to complete and update the OWL appropriately.
       std::string server;
       bool success = complete_single_tap(*handle_it, server);
+
       if (success)
       {
-        // Clear the tapped buckets from the OWL as they've been successfully
-        // tapped.
+        LOG_VERBOSE("Tap of %s completed successfully", server.c_str());
+
+        // Tap successful. Its buckets have now been successfully streamed.
         for (std::vector<uint16_t>::const_iterator bucket_it = taps[server].begin();
              bucket_it != taps[server].end();
              ++bucket_it)
         {
-          owl.erase(*bucket_it);
+          unstreamed_buckets.erase(*bucket_it);
         }
       }
       else
       {
-        // Remove this unreachable server from the OWL.
+        LOG_VERBOSE("Tap of %s failed", server.c_str());
         blacklist_server(owl, server);
       }
     }
   }
 
-  if (!is_owl_valid(owl))
+  // Tag the local memcached to mark it as up-to-date, even if the resync
+  // failed. The most likely cause for a failure is that all the replicas for
+  // some vbuckets are down which means the bucket's data has been lost and
+  // there is no point in trying to resync it again.
+  tag_local_memcached();
+
+  if (unstreamed_buckets.empty())
+  {
+    LOG_VERBOSE("Resync suceeded");
+  }
+  else
   {
     LOG_ERROR("Failed to stream some buckets");
     CL_ASTAIRE_RESYNC_FAILED.log();
@@ -419,20 +631,28 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
 }
 
 // Convert an OWL into a list of TAPs to perform.  This algorithm choses the
-// first available server for each bucket.
-//
-// This function assumes the provided OWL is valid (you can use is_owl_valid to
-// check this).
-Astaire::TapList Astaire::calculate_taps(const OutstandingWorkList& owl)
+// first available server for each bucket and removes this server from the OWL.
+Astaire::TapList Astaire::calculate_taps(OutstandingWorkList& owl)
 {
   TapList tl;
 
-  for (OutstandingWorkList::const_iterator it = owl.begin();
-       it != owl.end();
-       ++it)
+  for (OutstandingWorkList::iterator owl_it = owl.begin();
+       owl_it != owl.end();
+       ++owl_it)
   {
-    std::string tapped_server = it->second[0];
-    tl[tapped_server].push_back(it->first);
+    int vbucket = owl_it->first;
+    std::vector<std::string>& replica_list = owl_it->second;
+
+    if (!replica_list.empty())
+    {
+      std::string replica = replica_list[0];
+      tl[replica].push_back(vbucket);
+
+      // Erase the replica from the OWL. This is safe do do while iterating
+      // since we are not adding a new key to the OWL map (guaranteed safe by
+      // C++).
+      replica_list.erase(replica_list.begin());
+    }
   }
 
   return tl;
@@ -520,15 +740,30 @@ void Astaire::blacklist_server(OutstandingWorkList& owl,
   }
 }
 
-// Check that the provided OWL is valid (i.e. all buckets have at least one
-// available replica).
-bool Astaire::is_owl_valid(const OutstandingWorkList& owl)
+// Calculate the total number of vbuckets in the OWL. This counts vbuckets per
+// server (so if there are 3 vbuckets each owned by two replicas, this returns 6).
+int Astaire::owl_total_buckets(const OutstandingWorkList& owl)
+{
+  int buckets = 0;
+
+  for (OutstandingWorkList::const_iterator it = owl.begin();
+       it != owl.end();
+       ++it)
+  {
+    buckets += it->second.size();
+  }
+
+  return buckets;
+}
+
+// Work out if the OWL is empty (there are no servers left to stream from).
+bool Astaire::owl_empty(const OutstandingWorkList& owl)
 {
   for (OutstandingWorkList::const_iterator it = owl.begin();
        it != owl.end();
        ++it)
   {
-    if (it->second.empty())
+    if (!it->second.empty())
     {
       return false;
     }
@@ -549,3 +784,146 @@ uint16_t Astaire::vbucket_for_key(const std::string& key)
   int vbucket = hash & (128 - 1);
   return vbucket;
 }
+
+// Poll the local memcached node to check if it is up-to-date or not (whether it
+// has been running since the last resync completed).
+//
+// This makes use of a "tag". This is a record stored in memcached with a well
+// known key. Astaire writes this tag when it completes a resync. If the tag is
+// present it means that memcached has not restarted since the last resync and
+// therefore is up-to-date. If it is missing memcached has restarted and needs
+// to be resynced.
+Astaire::PollResult Astaire::poll_local_memcached()
+{
+  // Construct and send a GET request for the well-known key.
+  Memcached::GetReq get_req(ASTAIRE_TAG_KEY);
+  Memcached::BaseRsp* base_rsp;
+
+  // Send to the local memcached.
+  if (!local_req_rsp(&get_req, &base_rsp))
+  {
+    return ERROR;
+  }
+  Memcached::GetRsp* get_rsp = (Memcached::GetRsp*)base_rsp;
+
+  // Convert the GET response into a PollResult:
+  // -  If the key exists, memcached is up-to-date.
+  // -  If the key is missing, it is out-of-date.
+  // -  All other cases mean that something went wrong.
+  PollResult result;
+  if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::NO_ERROR)
+  {
+    LOG_DEBUG("Found tag - memcached is up-to-date");
+    result = UP_TO_DATE;
+  }
+  else if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::KEY_NOT_FOUND)
+  {
+    LOG_DEBUG("Did not find tag - memcached is out-of-date");
+    result = OUT_OF_DATE;
+  }
+  else
+  {
+    LOG_DEBUG("Memcached returned result code %d", get_rsp->result_code());
+    result = ERROR;
+  }
+
+  delete get_rsp; get_rsp = NULL;
+  return result;
+}
+
+// Tag the local memcached to mark it as up-to-date.
+// @return - Whether the tagging was successful.
+bool Astaire::tag_local_memcached()
+{
+  // Construct and send a GET request for the well-known key.
+  Memcached::SetReq set_req(ASTAIRE_TAG_KEY,
+                            vbucket_for_key(ASTAIRE_TAG_KEY),
+                            ASTAIRE_TAG_VALUE,
+                            0,
+                            0);
+  return local_req_rsp(&set_req, NULL);
+}
+
+
+// Untag the local memcached node (so it is treated as being out-of-date).
+// @return - Whether the untagging was successful.
+bool Astaire::untag_local_memcached()
+{
+  Memcached::DeleteReq del_req(ASTAIRE_TAG_KEY);
+  return local_req_rsp(&del_req, NULL);
+}
+
+// Utility function for doing a request/response cycle to the local memcached
+// node.
+//
+// @param req     - The request to send. The caller retains ownership.
+// @param rsp_ptr - (out) The location to store a pointer to the received
+//                  response. The caller gains ownership of the response and
+//                  must delete it when they are finished with it. May be NULL
+//                  meaning the response is not passed out.
+//
+// @return        - Whether a response of the right type has been received.
+//
+//                  Note that this does not reflect whether the request was
+//                  actually successful, only whether we got the request to
+//                  memcached and got a sensible looking response.
+bool Astaire::local_req_rsp(Memcached::BaseReq* req,
+                            Memcached::BaseRsp** rsp_ptr)
+{
+  // Create a connection to the local memcached.
+  Memcached::Connection local_conn(_self);
+  int rc = local_conn.connect();
+  if (rc != 0)
+  {
+    LOG_VERBOSE("Failed to connect to local server %s, error was (%d)",
+                _self.c_str(), rc);
+    return false;
+  }
+
+  // Send the request on the connection.
+  local_conn.send(*req);
+
+  // Check we get the right response back.
+  Memcached::BaseMessage* base_msg = NULL;
+  Memcached::Status status = local_conn.recv(&base_msg);
+  if (status != Memcached::Status::OK)
+  {
+    LOG_VERBOSE("Lost connection with local memcached instance");
+    delete base_msg; base_msg = NULL;
+    return false;
+  }
+
+  if ((!base_msg->is_response()) ||
+      (base_msg->op_code() != req->op_code()))
+  {
+    LOG_VERBOSE("Received unexpected message from local memcached instance (%x)",
+                base_msg->op_code());
+    delete base_msg; base_msg = NULL;
+    return false;
+  }
+
+  // If the caller cares about the response, give it to them.
+  if (rsp_ptr != NULL)
+  {
+    *rsp_ptr = (Memcached::BaseRsp*)base_msg;
+  }
+  return true;
+}
+
+// Update our view of the memcached cluster.
+// @return - Whether the view was updated successfully.
+bool Astaire::update_view()
+{
+  MemcachedConfig conf;
+
+  if (!_view_cfg->read_config(conf))
+  {
+    LOG_ERROR("Invalid cluster settings file");
+    return false;
+  }
+
+  _view->update(conf);
+  _view_updated = true;
+  return true;
+}
+
