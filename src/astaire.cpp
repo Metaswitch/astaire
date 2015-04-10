@@ -186,6 +186,12 @@ void Astaire::control_thread()
     if (resync)
     {
       do_resync(full_resync);
+
+      // Tag the local memcached to mark it as up-to-date, even if the resync
+      // failed. The most likely cause for a failure is that all the replicas for
+      // some vbuckets are down which means the bucket's data has been lost and
+      // there is no point in trying to resync it again.
+      tag_local_memcached();
     }
     else
     {
@@ -612,12 +618,6 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
       }
     }
   }
-
-  // Tag the local memcached to mark it as up-to-date, even if the resync
-  // failed. The most likely cause for a failure is that all the replicas for
-  // some vbuckets are down which means the bucket's data has been lost and
-  // there is no point in trying to resync it again.
-  tag_local_memcached();
 
   if (unstreamed_buckets.empty())
   {
