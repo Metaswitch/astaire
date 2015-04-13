@@ -538,8 +538,8 @@ Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
       }
 
       // If we do not already have the vbucket we need to stream from the other
-      // replicas.
-      if (!is_in_vector(source_replicas, _self))
+      // replicas (assuming there are any).
+      if (!source_replicas.empty() && !is_in_vector(source_replicas, _self))
       {
         LOG_DEBUG("Stream vbucket %d from %d replicas",
                   vbucket, source_replicas.size());
