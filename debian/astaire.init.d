@@ -193,7 +193,7 @@ do_wait_sync() {
         while true
         do
                 # Retrieve the statistics.
-                stats="`/usr/share/clearwater/bin/cw_stat astaire astaire_global |
+                stats="`/usr/share/clearwater/bin/astaire/cw_stat astaire astaire_global |
                        egrep '(buckets(NeedingResync|Resynchronized)|entriesResynchronized)' |
                        cut -d: -f2`"
                 bucket_need_resync=`echo $stats | cut -d\  -f1`
