@@ -86,6 +86,12 @@ case "$1" in
         setup_logging
         [ ! -x /usr/share/clearwater/bin/clearwater-logging-update ] || /usr/share/clearwater/bin/clearwater-logging-update
         add_section /etc/security/limits.conf astaire /etc/security/limits.conf.astaire
+
+        # Start the service to throttle astaire (to prevent it using too much
+        # CPU). `start` will not create a new instance if it is already
+        # running (though it does return non-0 in this scenario).
+        start astaire-throttle || /bin/true
+
         /usr/share/clearwater/infrastructure/scripts/astaire.monit
 
         # Restart astaire.  Always do this by terminating astaire so monit will

@@ -318,7 +318,7 @@ namespace Memcached
                uint64_t cas,
                uint32_t flags,
                uint32_t expiry) :
-      SetAddReplaceReq((uint8_t)OpCode::SET, key, vbucket, value, cas, flags, expiry)
+      SetAddReplaceReq((uint8_t)OpCode::REPLACE, key, vbucket, value, cas, flags, expiry)
     {}
   };
 

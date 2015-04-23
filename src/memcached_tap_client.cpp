@@ -401,7 +401,7 @@ Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
     return Memcached::Status::DISCONNECTED;
   }
 
-  static const int BUFLEN = 128;
+  static const int BUFLEN = 16 * 1024;
   char buf[BUFLEN];
   ssize_t recv_size = 0;
 
