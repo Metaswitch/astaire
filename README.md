@@ -28,7 +28,7 @@ Astaire is very easy to use, and integrates into the standard resizing algorithm
 
 ## SNMP Statistics
 
-Astaire can produce SNMP statistics while it is processing a resynchronization, to enable these statistics, install the `clearwater-snmp-handler-astaire` package and then use your favorite SNMP client to query the Astaire-related statistics listed in (PROJECT-CLEARWATER-MIB)[https://raw.githubusercontent.com/Metaswitch/clearwater-snmp-handlers/master/PROJECT-CLEARWATER-MIB].
+Astaire can produce SNMP statistics while it is processing a resynchronization, to enable these statistics, install the `clearwater-snmp-handler-astaire` package and then use your favorite SNMP client to query the Astaire-related statistics listed in [PROJECT-CLEARWATER-MIB](https://raw.githubusercontent.com/Metaswitch/clearwater-snmp-handlers/master/PROJECT-CLEARWATER-MIB).
 
 By tracking these statistics, an orchestrator can avoid having to rely on `wait-sync` to determine when a resize operation is safe to complete.  To do this, the orchestrator should track the `astaireBucketsNeedingResync` statistic and wait for it to return to 0.  This is effectively what `wait-sync` does under the covers.
 
