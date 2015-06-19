@@ -155,7 +155,7 @@ int init_options(int argc, char**argv, struct options& options)
 
     default:
       CL_ASTAIRE_INVALID_OPTION.log(argv[optind - 1]);
-      LOG_ERROR("Unknown option: %s.  Run with --help for options.\n",
+      TRC_ERROR("Unknown option: %s.  Run with --help for options.\n",
                 argv[optind - 1]);
       exit(2);
     }
@@ -180,11 +180,11 @@ void signal_handler(int sig)
   signal(SIGSEGV, signal_handler);
 
   // Log the signal, along with a backtrace.
-  LOG_BACKTRACE("Signal %d caught", sig);
+  TRC_BACKTRACE("Signal %d caught", sig);
 
   // Ensure the log files are complete - the core file created by abort() below
   // will trigger the log files to be copied to the diags bundle
-  LOG_COMMIT();
+  TRC_COMMIT();
 
   CL_ASTAIRE_CRASHED.log(strsignal(sig));
   closelog();
@@ -228,7 +228,7 @@ int main(int argc, char** argv)
     Log::setLogger(new Logger(options.log_directory, p.filename().string()));
   }
 
-  LOG_STATUS("Log level set to %d", options.log_level);
+  TRC_STATUS("Log level set to %d", options.log_level);
 
   std::stringstream options_ss;
   for (int ii = 0; ii < argc; ii++)
@@ -237,7 +237,7 @@ int main(int argc, char** argv)
     options_ss << " ";
   }
   std::string options_str = "Command-line options were: " + options_ss.str();
-  LOG_INFO(options_str.c_str());
+  TRC_INFO(options_str.c_str());
 
   if (init_options(argc, argv, options) != 0)
   {
@@ -247,17 +247,17 @@ int main(int argc, char** argv)
 
   if (options.local_memcached_server == "")
   {
-    LOG_ERROR("Must supply local memcached server name");
+    TRC_ERROR("Must supply local memcached server name");
     return 2;
   }
 
   if (options.cluster_settings_file == "")
   {
-    LOG_ERROR("Must supply cluster settings file");
+    TRC_ERROR("Must supply cluster settings file");
     return 2;
   }
 
-  LOG_STATUS("Astaire starting up");
+  TRC_STATUS("Astaire starting up");
 
   Alarm* astaire_resync_alarm = NULL;
   if (options.alarms_enabled)
@@ -295,7 +295,7 @@ int main(int argc, char** argv)
     AlarmReqAgent::get_instance().stop();
   }
 
-  LOG_INFO("Astaire shutting down");
+  TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
   delete per_conn_stats;
   delete global_stats;

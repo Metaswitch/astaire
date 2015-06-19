@@ -104,8 +104,8 @@ public:
                             this);
     if (rc != 0)
     {
-      LOG_ERROR("Stats reporter thread creation failed (%d)", rc);
-      LOG_ERROR("Stats will only be reported on change");
+      TRC_ERROR("Stats reporter thread creation failed (%d)", rc);
+      TRC_ERROR("Stats will only be reported on change");
     }
 
     reset();

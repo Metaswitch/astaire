@@ -337,7 +337,7 @@ int Memcached::Connection::connect()
   int rc = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &ai_hint, &ai);
   if (rc < 0)
   {
-    LOG_ERROR("Failed to resolve hostname %s (%s)",
+    TRC_ERROR("Failed to resolve hostname %s (%s)",
               _address.c_str(),
               gai_strerror(rc));
     return rc;
@@ -347,14 +347,14 @@ int Memcached::Connection::connect()
   if (_sock < 0)
   {
     int err = errno;
-    LOG_ERROR("Failed to create socket (%d)", err);
+    TRC_ERROR("Failed to create socket (%d)", err);
     return err;
   }
 
   if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
   {
     int err = errno;
-    LOG_ERROR("Failed to connect to %s (%d)",
+    TRC_ERROR("Failed to connect to %s (%d)",
               _address.c_str(),
               err);
     ::close(_sock); _sock = -1;
@@ -387,7 +387,7 @@ bool Memcached::Connection::send(const Memcached::BaseMessage& req)
   if (::send(_sock, bin.data(), bin.length(), 0) < 0)
   {
     int err = errno;
-    LOG_ERROR("Error during send() on socket (%d)", err);
+    TRC_ERROR("Error during send() on socket (%d)", err);
     ::close(_sock); _sock = -1;
     return false;
   }
@@ -417,14 +417,14 @@ Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
     }
     else if (recv_size == 0)
     {
-      LOG_DEBUG("Socket closed by peer");
+      TRC_DEBUG("Socket closed by peer");
       ::close(_sock); _sock = -1;
       return Memcached::Status::DISCONNECTED;
     }
     else
     {
       int err = errno;
-      LOG_ERROR("Error during recv() on socket (%d)", err);
+      TRC_ERROR("Error during recv() on socket (%d)", err);
       ::close(_sock); _sock = -1;
       return Memcached::Status::ERROR;
     }

@@ -115,11 +115,11 @@ Astaire::~Astaire()
 void Astaire::reload_config()
 {
   pthread_mutex_lock(&_lock);
-  LOG_DEBUG("Reloading memcached config");
+  TRC_DEBUG("Reloading memcached config");
 
   if (update_view())
   {
-    LOG_DEBUG("Signal control thread to start a resync");
+    TRC_DEBUG("Signal control thread to start a resync");
     pthread_cond_signal(&_cv);
   }
 
@@ -133,7 +133,7 @@ void Astaire::trigger_full_resync()
   // We might as well update the store view before we do a full resync.
   update_view();
 
-  LOG_DEBUG("Signal control thread to start a full resync");
+  TRC_DEBUG("Signal control thread to start a full resync");
   _full_resync_requested = true;
   pthread_cond_signal(&_cv);
 
@@ -158,14 +158,14 @@ void Astaire::control_thread()
 
     if (_view_updated)
     {
-      LOG_DEBUG("View has been updated - resync required");
+      TRC_DEBUG("View has been updated - resync required");
       _view_updated = false;
       resync = true;
     }
 
     if (_full_resync_requested)
     {
-      LOG_DEBUG("Full resync has been requested");
+      TRC_DEBUG("Full resync has been requested");
       _full_resync_requested = false;
       resync = true;
       full_resync = true;
@@ -178,7 +178,7 @@ void Astaire::control_thread()
     PollResult res = poll_local_memcached();
     if (res == OUT_OF_DATE)
     {
-      LOG_DEBUG("Local memcached is not up-to-date - full resync required");
+      TRC_DEBUG("Local memcached is not up-to-date - full resync required");
       resync = true;
       full_resync = true;
     }
@@ -197,7 +197,7 @@ void Astaire::control_thread()
     {
       // Wait 10s for the next resync trigger. If we don't get one in that time
       // we wake up and poll memcached again.
-      LOG_DEBUG("Wait for resync trigger");
+      TRC_DEBUG("Wait for resync trigger");
       struct timespec ts;
       clock_gettime(CLOCK_MONOTONIC, &ts);
       ts.tv_sec += 10;
@@ -226,7 +226,7 @@ void* Astaire::tap_buckets_thread(void *data)
   if (data == NULL)
   {
     // This must never happen.
-    LOG_ERROR("Logical error - TapBucketsThreadData is NULL");
+    TRC_ERROR("Logical error - TapBucketsThreadData is NULL");
     exit(2);
   }
 
@@ -238,7 +238,7 @@ void* Astaire::tap_buckets_thread(void *data)
   int rc = local_conn.connect();
   if (rc != 0)
   {
-    LOG_ERROR("Failed to connect to local server %s, error was (%d)",
+    TRC_ERROR("Failed to connect to local server %s, error was (%d)",
               tap_data->local_server.c_str(),
               rc);
     return data;
@@ -248,7 +248,7 @@ void* Astaire::tap_buckets_thread(void *data)
   rc = tap_conn.connect();
   if (rc != 0)
   {
-    LOG_ERROR("Failed to connect to remote server %s, error was (%d)",
+    TRC_ERROR("Failed to connect to remote server %s, error was (%d)",
               tap_data->tap_server.c_str(),
               rc);
     return data;
@@ -284,7 +284,7 @@ void* Astaire::tap_buckets_thread(void *data)
       {
         // TAP_CONNECT should not be replied to, if it has, it is to
         // say that the message was not understood.
-        LOG_ERROR("Cannot tap %s as the TAP protocol was not supported",
+        TRC_ERROR("Cannot tap %s as the TAP protocol was not supported",
                   tap_data->tap_server.c_str());
         tap_data->success = false;
         finished = true;
@@ -301,7 +301,7 @@ void* Astaire::tap_buckets_thread(void *data)
         // Ths can be removed once memcached returns vbuckets on
         // TAP_MUTATE requests
         uint16_t vbucket = vbucket_for_key(mutate->key());
-        LOG_DEBUG("Received TAP_MUTATE for key %s from bucket %d",
+        TRC_DEBUG("Received TAP_MUTATE for key %s from bucket %d",
                   mutate->key().c_str(),
                   vbucket);
 
@@ -311,15 +311,15 @@ void* Astaire::tap_buckets_thread(void *data)
                     vbucket);
         if (iter == tap_data->buckets.end())
         {
-          LOG_DEBUG("Disarding TAP_MUTATE for incorrect vBucket");
+          TRC_DEBUG("Disarding TAP_MUTATE for incorrect vBucket");
         }
         else if (mutate->key().find(ASTAIRE_KEY_PREFIX) == 0)
         {
-          LOG_DEBUG("Disarding TAP_MUTATE for Astaire tag record");
+          TRC_DEBUG("Disarding TAP_MUTATE for Astaire tag record");
         }
         else
         {
-          LOG_DEBUG("GETing record from local memcached");
+          TRC_DEBUG("GETing record from local memcached");
           Memcached::GetReq get(mutate->key());
           local_conn.send(get);
 
@@ -327,7 +327,7 @@ void* Astaire::tap_buckets_thread(void *data)
           Memcached::Status status = local_conn.recv(&base_msg);
           if (status != Memcached::Status::OK)
           {
-            LOG_ERROR("Lost connection with local memcached instance");
+            TRC_ERROR("Lost connection with local memcached instance");
             tap_data->success = false;
             continue;
           }
@@ -336,7 +336,7 @@ void* Astaire::tap_buckets_thread(void *data)
           if ((!base_msg->is_response()) ||
               (base_msg->op_code() != (uint8_t)Memcached::OpCode::GET))
           {
-            LOG_ERROR("Received unexpected message from local memcached instance (%x)", base_msg->op_code());
+            TRC_ERROR("Received unexpected message from local memcached instance (%x)", base_msg->op_code());
             tap_data->success = false;
             delete base_msg; base_msg = NULL;
             continue;
@@ -365,7 +365,7 @@ void* Astaire::tap_buckets_thread(void *data)
           }
           else
           {
-            LOG_STATUS("Received unexpected Get response result code %x", get_rsp->result_code());
+            TRC_STATUS("Received unexpected Get response result code %x", get_rsp->result_code());
             tap_data->success = false;
             delete get_rsp; get_rsp = NULL;
             continue;
@@ -386,7 +386,7 @@ void* Astaire::tap_buckets_thread(void *data)
             Memcached::Status status = local_conn.recv(&add_rsp);
             if (status != Memcached::Status::OK)
             {
-              LOG_ERROR("Lost connection with local memcached instance");
+              TRC_ERROR("Lost connection with local memcached instance");
               tap_data->success = false;
               continue;
             }
@@ -406,7 +406,7 @@ void* Astaire::tap_buckets_thread(void *data)
             Memcached::Status status = local_conn.recv(&replace_rsp);
             if (status != Memcached::Status::OK)
             {
-              LOG_ERROR("Lost connection with local memcached instance");
+              TRC_ERROR("Lost connection with local memcached instance");
               tap_data->success = false;
               continue;
             }
@@ -460,12 +460,12 @@ void* Astaire::tap_buckets_thread(void *data)
 // @param full_resync - Whether to do a full-resync or a minimal-resync.
 void Astaire::do_resync(bool full_resync)
 {
-  LOG_DEBUG("Start resync operation");
+  TRC_DEBUG("Start resync operation");
 
   OutstandingWorkList owl = calculate_worklist(full_resync);
   if (owl.empty())
   {
-    LOG_INFO("No resyncing required");
+    TRC_INFO("No resyncing required");
     return;
   }
 
@@ -505,7 +505,7 @@ Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
 
   if (new_replicas.empty())
   {
-    LOG_DEBUG("No resize in progress - set new replicas equal to current");
+    TRC_DEBUG("No resize in progress - set new replicas equal to current");
     new_replicas = current_replicas;
   }
 
@@ -519,7 +519,7 @@ Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
     if (is_in_vector(it->second, _self))
     {
       // We should own this vbucket. Work out what replicas to stream it from.
-      LOG_DEBUG("%s will own vbucket %d", _self.c_str(), vbucket);
+      TRC_DEBUG("%s will own vbucket %d", _self.c_str(), vbucket);
       MemcachedStoreView::ReplicaList source_replicas = current_replicas[vbucket];
 
       if (full_resync)
@@ -532,7 +532,7 @@ Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
 
         if (it != source_replicas.end())
         {
-          LOG_DEBUG("Full resync - remove local server from source replicas");
+          TRC_DEBUG("Full resync - remove local server from source replicas");
           source_replicas.erase(it);
         }
       }
@@ -541,7 +541,7 @@ Astaire::OutstandingWorkList Astaire::calculate_worklist(bool full_resync)
       // replicas (assuming there are any).
       if (!source_replicas.empty() && !is_in_vector(source_replicas, _self))
       {
-        LOG_DEBUG("Stream vbucket %d from %d replicas",
+        TRC_DEBUG("Stream vbucket %d from %d replicas",
                   vbucket, source_replicas.size());
         owl[vbucket] = source_replicas;
       }
@@ -601,7 +601,7 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
 
       if (success)
       {
-        LOG_VERBOSE("Tap of %s completed successfully", server.c_str());
+        TRC_VERBOSE("Tap of %s completed successfully", server.c_str());
 
         // Tap successful. Its buckets have now been successfully streamed.
         for (std::vector<uint16_t>::const_iterator bucket_it = taps[server].begin();
@@ -613,7 +613,7 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
       }
       else
       {
-        LOG_VERBOSE("Tap of %s failed", server.c_str());
+        TRC_VERBOSE("Tap of %s failed", server.c_str());
         blacklist_server(owl, server);
       }
     }
@@ -621,11 +621,11 @@ void Astaire::process_worklist(OutstandingWorkList& owl)
 
   if (unstreamed_buckets.empty())
   {
-    LOG_VERBOSE("Resync suceeded");
+    TRC_VERBOSE("Resync suceeded");
   }
   else
   {
-    LOG_ERROR("Failed to stream some buckets");
+    TRC_ERROR("Failed to stream some buckets");
     CL_ASTAIRE_RESYNC_FAILED.log();
   }
 }
@@ -677,11 +677,11 @@ bool Astaire::perform_single_tap(const std::string& server,
                                                                buckets,
                                                                _global_stats,
                                                                conn_stat);
-  LOG_INFO("Starting TAP of %s", server.c_str());
+  TRC_INFO("Starting TAP of %s", server.c_str());
   int rc = pthread_create(handle, NULL, tap_buckets_thread, (void*)thread_data);
   if (rc != 0)
   {
-    LOG_ERROR("Failed to create TAP thread (%d)", rc);
+    TRC_ERROR("Failed to create TAP thread (%d)", rc);
     return false;
   }
   return true;
@@ -699,13 +699,13 @@ bool Astaire::complete_single_tap(pthread_t thread_id, std::string& tap_server)
 
   if (rc != 0)
   {
-    LOG_ERROR("Failed to join TAP thread (%d)", rc);
+    TRC_ERROR("Failed to join TAP thread (%d)", rc);
     return false;
   }
 
   if (thread_data == NULL)
   {
-    LOG_ERROR("Logical Error: TAP thread returned NULL thread data");
+    TRC_ERROR("Logical Error: TAP thread returned NULL thread data");
     exit(2);
   }
 
@@ -813,17 +813,17 @@ Astaire::PollResult Astaire::poll_local_memcached()
   PollResult result;
   if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::NO_ERROR)
   {
-    LOG_DEBUG("Found tag - memcached is up-to-date");
+    TRC_DEBUG("Found tag - memcached is up-to-date");
     result = UP_TO_DATE;
   }
   else if (get_rsp->result_code() == (uint8_t)Memcached::ResultCode::KEY_NOT_FOUND)
   {
-    LOG_DEBUG("Did not find tag - memcached is out-of-date");
+    TRC_DEBUG("Did not find tag - memcached is out-of-date");
     result = OUT_OF_DATE;
   }
   else
   {
-    LOG_DEBUG("Memcached returned result code %d", get_rsp->result_code());
+    TRC_DEBUG("Memcached returned result code %d", get_rsp->result_code());
     result = ERROR;
   }
 
@@ -875,7 +875,7 @@ bool Astaire::local_req_rsp(Memcached::BaseReq* req,
   int rc = local_conn.connect();
   if (rc != 0)
   {
-    LOG_VERBOSE("Failed to connect to local server %s, error was (%d)",
+    TRC_VERBOSE("Failed to connect to local server %s, error was (%d)",
                 _self.c_str(), rc);
     return false;
   }
@@ -888,7 +888,7 @@ bool Astaire::local_req_rsp(Memcached::BaseReq* req,
   Memcached::Status status = local_conn.recv(&base_msg);
   if (status != Memcached::Status::OK)
   {
-    LOG_VERBOSE("Lost connection with local memcached instance");
+    TRC_VERBOSE("Lost connection with local memcached instance");
     delete base_msg; base_msg = NULL;
     return false;
   }
@@ -896,7 +896,7 @@ bool Astaire::local_req_rsp(Memcached::BaseReq* req,
   if ((!base_msg->is_response()) ||
       (base_msg->op_code() != req->op_code()))
   {
-    LOG_VERBOSE("Received unexpected message from local memcached instance (%x)",
+    TRC_VERBOSE("Received unexpected message from local memcached instance (%x)",
                 base_msg->op_code());
     delete base_msg; base_msg = NULL;
     return false;
@@ -918,7 +918,7 @@ bool Astaire::update_view()
 
   if (!_view_cfg->read_config(conf))
   {
-    LOG_ERROR("Invalid cluster settings file");
+    TRC_ERROR("Invalid cluster settings file");
     return false;
   }
 
