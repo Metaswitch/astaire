@@ -39,6 +39,7 @@
 #include "astaire_pd_definitions.hpp"
 #include "astaire_statistics.hpp"
 #include "logger.h"
+#include "astaire_alarmdefinition.h"
 
 #include <sstream>
 #include <getopt.h>
