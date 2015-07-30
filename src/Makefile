@@ -151,7 +151,7 @@ endif
 include ${MK_DIR}/platform.mk
 
 .PHONY: stage-build
-stage-build: build
+stage-build: alarms build
 
 .PHONY: test
 test: run_test coverage vg coverage-check vg-check
@@ -239,6 +239,11 @@ vg_raw: build_test | $(TEST_OUT_DIR)
 
 .PHONY: distclean
 distclean: clean
+
+alarms:
+	${MAKE} -f ../modules/cpp-common/makefiles/alarms-header.mk
+	${BUILD_DIR}/bin/alarm_header -j "../root/usr/share/clearwater/infrastructure/alarms/astaire_alarms.json" -n "astaire"
+	mv astaire_alarmdefinition.h ${ROOT}/usr/include/
 
 # Build rules for GMock/GTest library.
 $(OBJ_DIR_TEST)/gtest-all.o : $(GTEST_SRCS_)

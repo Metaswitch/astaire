@@ -10,3 +10,6 @@
 [submodule "modules/gmock"]
 	path = modules/gmock
 	url = git@github.com:Metaswitch/gmock-upstream.git
+[submodule "modules/rapidjson"]
+	path = modules/rapidjson
+	url = git@github.com:miloyip/rapidjson.git

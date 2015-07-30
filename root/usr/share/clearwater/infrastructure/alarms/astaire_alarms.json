@@ -1,0 +1,38 @@
+{
+    "alarms": [
+        {
+            "index": 5500,
+            "cause": "SOFTWARE_ERROR",
+            "name": "ASTAIRE_PROCESS_FAIL",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The Astaire process has been restored to normal operation.",
+                    "description": "Astaire: Process failure cleared"
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Monit has detected that the Astaire process has failed. A restart will automatically be attempted. If this alarm does not clear, the Astaire process may have been stopped or an unrecoverable failure may have occurred.",
+                    "description": "Astaire: Process failure"
+                }
+            ]
+        },
+        {
+            "index": 5501,
+            "cause": "DATABASE_INCONSISTENCY",
+            "name": "ASTAIRE_RESYNC_IN_PROGRESS",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The local Memcached process is synchronized with the rest of the cluster. Memcached resynchronization is no longer blocking a scale-up or scale-down operation (a different type of resynchronization operation may still be in progress though.",
+                    "description": "Astaire: Memcached database synchronized"
+                },
+                {
+                    "severity": "MINOR",
+                    "details": "Astaire is resynchronizing the local Memcached process with the rest of the cluster. Service should be unaffected. If a scale-up or scale-down operation is in progress, wait for resynchronization to finish before completing the operation.",
+                    "description": "Astaire: Memcached database resynchronization in progress"
+                }
+            ]
+        }
+    ]
+}
