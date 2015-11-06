@@ -52,7 +52,6 @@ struct options
   bool log_to_file;
   std::string log_directory;
   int log_level;
-  bool alarms_enabled;
 };
 
 enum Options
@@ -61,7 +60,6 @@ enum Options
   CLUSTER_SETTINGS_FILE,
   LOG_FILE,
   LOG_LEVEL,
-  ALARMS_ENABLED,
   HELP,
 };
 
@@ -71,7 +69,6 @@ const static struct option long_opt[] =
   {"cluster-settings-file",  required_argument, NULL, CLUSTER_SETTINGS_FILE},
   {"log-file",               required_argument, NULL, LOG_FILE},
   {"log-level",              required_argument, NULL, LOG_LEVEL},
-  {"alarms-enabled",         no_argument,       NULL, ALARMS_ENABLED},
   {"help",                   no_argument,       NULL, HELP},
   {NULL,                     0,                 NULL, 0},
 };
@@ -87,7 +84,6 @@ void usage(void)
        "                            The filename of the cluster settings file\n"
        " --log-file=<directory>     Log to file in specified directory\n"
        " --log-level=N              Set log level to N (default: 4)\n"
-       " --alarms-enabled           Enable SNMP alarms (default: disabled)\n"
        " --help                     Show this help screen\n"
        );
 }
@@ -137,10 +133,6 @@ int init_options(int argc, char**argv, struct options& options)
 
     case CLUSTER_SETTINGS_FILE:
       options.cluster_settings_file = optarg;
-      break;
-
-    case ALARMS_ENABLED:
-      options.alarms_enabled = true;
       break;
 
     case HELP:
@@ -260,15 +252,11 @@ int main(int argc, char** argv)
 
   TRC_STATUS("Astaire starting up");
 
-  Alarm* astaire_resync_alarm = NULL;
-  if (options.alarms_enabled)
-  {
-    astaire_resync_alarm = new Alarm("astaire",
-                                     AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
-                                     AlarmDef::MINOR);
-    AlarmReqAgent::get_instance().start();
-    AlarmState::clear_all("astaire");
-  }
+  Alarm* astaire_resync_alarm = new Alarm("astaire",
+                                          AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
+                                          AlarmDef::MINOR);
+  AlarmReqAgent::get_instance().start();
+  AlarmState::clear_all("astaire");
 
   // These values match those in MemcachedStore's constructor
   MemcachedStoreView* view = new MemcachedStoreView(128, 2);
@@ -291,10 +279,7 @@ int main(int argc, char** argv)
 
   sem_wait(&term_sem);
 
-  if (options.alarms_enabled)
-  {
-    AlarmReqAgent::get_instance().stop();
-  }
+  AlarmReqAgent::get_instance().stop();
 
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
