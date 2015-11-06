@@ -112,8 +112,7 @@ do_start()
         DAEMON_ARGS="--local-name=$local_ip:11211
                      --cluster-settings-file=/etc/clearwater/cluster_settings
                      --log-file=$log_directory
-                     --log-level=$log_level
-                     --alarms-enabled"
+                     --log-level=$log_level"
 
         $namespace_prefix start-stop-daemon --start --quiet --background --make-pidfile --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME --nicelevel 10 -- $DAEMON_ARGS \
                 || return 2
