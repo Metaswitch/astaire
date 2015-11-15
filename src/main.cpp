@@ -39,6 +39,7 @@
 #include "astaire_pd_definitions.hpp"
 #include "astaire_statistics.hpp"
 #include "logger.h"
+#include "utils.h"
 #include "astaire_alarmdefinition.h"
 
 #include <sstream>
@@ -52,6 +53,7 @@ struct options
   bool log_to_file;
   std::string log_directory;
   int log_level;
+  std::string pidfile;
 };
 
 enum Options
@@ -60,6 +62,7 @@ enum Options
   CLUSTER_SETTINGS_FILE,
   LOG_FILE,
   LOG_LEVEL,
+  PIDFILE,
   HELP,
 };
 
@@ -69,6 +72,7 @@ const static struct option long_opt[] =
   {"cluster-settings-file",  required_argument, NULL, CLUSTER_SETTINGS_FILE},
   {"log-file",               required_argument, NULL, LOG_FILE},
   {"log-level",              required_argument, NULL, LOG_LEVEL},
+  {"pidfile",                required_argument, NULL, PIDFILE},
   {"help",                   no_argument,       NULL, HELP},
   {NULL,                     0,                 NULL, 0},
 };
@@ -84,6 +88,7 @@ void usage(void)
        "                            The filename of the cluster settings file\n"
        " --log-file=<directory>     Log to file in specified directory\n"
        " --log-level=N              Set log level to N (default: 4)\n"
+       " --pidfile=<filename>       Write pidfile\n"
        " --help                     Show this help screen\n"
        );
 }
@@ -133,6 +138,10 @@ int init_options(int argc, char**argv, struct options& options)
 
     case CLUSTER_SETTINGS_FILE:
       options.cluster_settings_file = optarg;
+      break;
+
+    case PIDFILE:
+      options.pidfile = std::string(optarg);
       break;
 
     case HELP:
@@ -201,6 +210,7 @@ int main(int argc, char** argv)
   options.log_directory = "";
   options.local_memcached_server = "";
   options.cluster_settings_file = "";
+  options.pidfile = "";
 
   boost::filesystem::path p = argv[0];
   // Copy the filename to a string so that we can be sure of its lifespan -
@@ -251,6 +261,17 @@ int main(int argc, char** argv)
   }
 
   TRC_STATUS("Astaire starting up");
+
+  if (options.pidfile != "")
+  {
+    int rc = Utils::lock_and_write_pidfile(options.pidfile);
+    if (rc == -1)
+    {
+      // Failure to acquire pidfile lock
+      TRC_ERROR("Could not write pidfile - exiting");
+      return 2;
+    }
+  }
 
   Alarm* astaire_resync_alarm = new Alarm("astaire",
                                           AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
