@@ -39,7 +39,7 @@
 # Set up the monit configuration for astaire
 cat > /etc/monit/conf.d/astaire.monit <<EOF
 # Monitor the server's PID file and check its memory usage.
-check process astaire_process pidfile /var/run/astaire.pid
+check process astaire_process pidfile /var/run/astaire/astaire.pid
   group astaire
 
   start program   = "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/astaire start'"
