@@ -108,6 +108,24 @@ bool Memcached::from_wire(std::string& msg,
     case (uint8_t)OpCode::TAP_MUTATE:
       output = from_wire_int<Memcached::TapMutateReq>(msg);
       break;
+    case (uint8_t)OpCode::GET:
+      output = from_wire_int<Memcached::GetReq>(msg);
+      break;
+    case (uint8_t)OpCode::SET:
+      output = from_wire_int<Memcached::SetReq>(msg);
+      break;
+    case (uint8_t)OpCode::ADD:
+      output = from_wire_int<Memcached::AddReq>(msg);
+      break;
+    case (uint8_t)OpCode::REPLACE:
+      output = from_wire_int<Memcached::ReplaceReq>(msg);
+      break;
+    case (uint8_t)OpCode::DELETE:
+      output = from_wire_int<Memcached::DeleteReq>(msg);
+      break;
+    case (uint8_t)OpCode::VERSION:
+      output = from_wire_int<Memcached::VersionReq>(msg);
+      break;
     default:
       output = from_wire_int<Memcached::BaseReq>(msg);
       break;
@@ -201,6 +219,48 @@ Memcached::GetRsp::GetRsp(const std::string& msg) : BaseRsp(msg)
   _value = msg.substr(sizeof(MsgHdr) + extra_length + key_length, body_length - (extra_length + key_length));
 }
 
+Memcached::GetRsp::GetRsp(uint16_t status,
+                          uint32_t opaque,
+                          uint64_t cas,
+                          const std::string& value,
+                          uint32_t flags) :
+  BaseRsp((uint8_t)OpCode::GET, "", status, opaque, cas),
+  _value(value),
+  _flags(flags)
+{
+}
+
+std::string Memcached::GetRsp::generate_extra() const
+{
+  std::string extras_string;
+  Utils::write(_flags, extras_string);
+  return extras_string;
+}
+
+std::string Memcached::GetRsp::generate_value() const
+{
+  return _value;
+}
+
+Memcached::SetAddReplaceReq::SetAddReplaceReq(const std::string& msg) :
+  BaseReq(msg),
+  _value(),
+  _flags(0),
+  _expiry(0)
+{
+  const char* raw = msg.data();
+  uint16_t key_length = HDR_GET(raw, key_length);
+  uint8_t extra_length = HDR_GET(raw, extra_length);
+  uint32_t body_length = HDR_GET(raw, body_length);
+  raw = NULL; // It's now safe to call non-const functions on `msg`
+
+  std::string extra = msg.substr(sizeof(MsgHdr), extra_length);
+  _flags = Utils::network_to_host(((uint32_t*)extra.data())[0]);
+  _expiry = Utils::network_to_host(((uint32_t*)extra.data())[1]);
+  _value = msg.substr(sizeof(MsgHdr) + (extra_length + key_length),
+                      body_length - (extra_length + key_length));
+}
+
 Memcached::SetAddReplaceReq::SetAddReplaceReq(uint8_t command,
                                               std::string key,
                                               uint16_t vbucket,
@@ -231,6 +291,19 @@ std::string Memcached::SetAddReplaceReq::generate_extra() const
 std::string Memcached::SetAddReplaceReq::generate_value() const
 {
   return _value;
+}
+
+Memcached::VersionRsp::VersionRsp(uint16_t status,
+                                  uint32_t opaque,
+                                  const std::string& version) :
+  BaseRsp((uint8_t)OpCode::VERSION, "", status, opaque, 0),
+  _version(version)
+{
+}
+
+std::string Memcached::VersionRsp::generate_value() const
+{
+  return _version;
 }
 
 Memcached::TapConnectReq::TapConnectReq(const VBucketList& buckets) :

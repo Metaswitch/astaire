@@ -320,7 +320,7 @@ void* Astaire::tap_buckets_thread(void *data)
         else
         {
           TRC_DEBUG("GETing record from local memcached");
-          Memcached::GetReq get(mutate->key());
+          Memcached::GetReq get(mutate->key(), 0);
           local_conn.send(get);
 
           Memcached::BaseMessage* base_msg;
@@ -796,7 +796,7 @@ uint16_t Astaire::vbucket_for_key(const std::string& key)
 Astaire::PollResult Astaire::poll_local_memcached()
 {
   // Construct and send a GET request for the well-known key.
-  Memcached::GetReq get_req(ASTAIRE_TAG_KEY);
+  Memcached::GetReq get_req(ASTAIRE_TAG_KEY, 0);
   Memcached::BaseRsp* base_rsp;
 
   // Send to the local memcached.
@@ -849,7 +849,7 @@ bool Astaire::tag_local_memcached()
 // @return - Whether the untagging was successful.
 bool Astaire::untag_local_memcached()
 {
-  Memcached::DeleteReq del_req(ASTAIRE_TAG_KEY);
+  Memcached::DeleteReq del_req(ASTAIRE_TAG_KEY, 0);
   return local_req_rsp(&del_req, NULL);
 }
 

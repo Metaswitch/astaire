@@ -90,6 +90,7 @@ namespace Memcached
     ADD = 0x02,
     REPLACE = 0x03,
     DELETE = 0x04,
+    VERSION = 0x0b,
     TAP_CONNECT = 0x40,
     TAP_MUTATE = 0x41,
     SET_VBUCKET = 0x3d
@@ -226,18 +227,30 @@ namespace Memcached
   class GetReq : public BaseReq
   {
   public:
-    GetReq(std::string key) : BaseReq((uint8_t)OpCode::GET, key, 0, 0, 0) {}
+    GetReq(const std::string& msg) : BaseReq(msg) {}
+
+    GetReq(std::string key, uint32_t opaque) :
+      BaseReq((uint8_t)OpCode::GET, key, 0, opaque, 0)
+    {}
   };
 
   class GetRsp : public BaseRsp
   {
   public:
     GetRsp(const std::string& msg);
+    GetRsp(uint16_t status,
+           uint32_t opaque,
+           uint64_t cas,
+           const std::string& value,
+           uint32_t flags);
 
     std::string value() const { return _value; };
     uint32_t flags() const { return _flags; };
 
   private:
+    virtual std::string generate_extra() const;
+    virtual std::string generate_value() const;
+
     std::string _value;
     uint32_t _flags;
   };
@@ -245,18 +258,25 @@ namespace Memcached
   class DeleteReq : public BaseReq
   {
   public:
-    DeleteReq(std::string key) : BaseReq((uint8_t)OpCode::DELETE, key, 0, 0, 0) {}
+    DeleteReq(const std::string& msg) : BaseReq(msg) {}
+    DeleteReq(std::string key, uint32_t opaque) :
+      BaseReq((uint8_t)OpCode::DELETE, key, 0, opaque, 0)
+    {}
   };
 
   class DeleteRsp : public BaseRsp
   {
   public:
     DeleteRsp(const std::string& msg);
+    DeleteRsp(uint8_t status, uint32_t opaque) :
+      BaseRsp((uint8_t)OpCode::DELETE, "", status, opaque, 0)
+    {}
   };
 
   class SetAddReplaceReq : public BaseReq
   {
   public:
+    SetAddReplaceReq(const std::string& msg);
     SetAddReplaceReq(uint8_t command,
                      std::string key,
                      uint16_t vbucket,
@@ -279,11 +299,17 @@ namespace Memcached
   {
   public:
     SetAddReplaceRsp(const std::string& msg) : BaseRsp(msg) {};
+
+    SetAddReplaceRsp(uint8_t command, uint8_t status, uint32_t opaque) :
+      BaseRsp(command, "", status, opaque, 0)
+    {};
   };
 
   class SetReq : public SetAddReplaceReq
   {
   public:
+    SetReq(const std::string& msg) : SetAddReplaceReq(msg) {}
+
     SetReq(std::string key,
            uint16_t vbucket,
            std::string value,
@@ -298,6 +324,8 @@ namespace Memcached
   class AddReq : public SetAddReplaceReq
   {
   public:
+    AddReq(const std::string& msg): SetAddReplaceReq(msg) {}
+
     AddReq(std::string key,
            uint16_t vbucket,
            std::string value,
@@ -312,6 +340,8 @@ namespace Memcached
   class ReplaceReq : public SetAddReplaceReq
   {
   public:
+    ReplaceReq(const std::string& msg): SetAddReplaceReq(msg) {}
+
     ReplaceReq(std::string key,
                uint16_t vbucket,
                std::string value,
@@ -335,6 +365,25 @@ namespace Memcached
 
   private:
     std::vector<uint16_t> _buckets;
+  };
+
+  class VersionReq : public BaseReq
+  {
+  public:
+    VersionReq(const std::string& msg) : BaseReq(msg) {}
+  };
+
+  class VersionRsp : public BaseRsp
+  {
+  public:
+    VersionRsp(uint16_t status,
+               uint32_t opaque,
+               const std::string& version);
+
+    std::string generate_value() const;
+
+  private:
+    std::string _version;
   };
 
   class TapMutateReq : public BaseReq
