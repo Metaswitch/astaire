@@ -308,8 +308,7 @@ std::string Memcached::SetVBucketReq::generate_extra() const
   return ss;
 }
 
-Memcached::Connection::Connection(const std::string& address) :
-  _address(address),
+Memcached::Connection::Connection() :
   _sock(-1)
 {
 }
@@ -317,53 +316,6 @@ Memcached::Connection::Connection(const std::string& address) :
 Memcached::Connection::~Connection()
 {
   disconnect();
-}
-
-int Memcached::Connection::connect()
-{
-  struct addrinfo ai_hint;
-  memset(&ai_hint, 0x00, sizeof(ai_hint));
-  ai_hint.ai_family = AF_UNSPEC;
-  ai_hint.ai_socktype = SOCK_STREAM;
-
-  std::string host;
-  int port;
-  if (!::Utils::split_host_port(_address, host, port))
-  {
-    return -1;
-  }
-
-  struct addrinfo* ai;
-  int rc = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &ai_hint, &ai);
-  if (rc < 0)
-  {
-    TRC_ERROR("Failed to resolve hostname %s (%s)",
-              _address.c_str(),
-              gai_strerror(rc));
-    return rc;
-  }
-
-  _sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-  if (_sock < 0)
-  {
-    int err = errno;
-    TRC_ERROR("Failed to create socket (%d)", err);
-    return err;
-  }
-
-  if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
-  {
-    int err = errno;
-    TRC_ERROR("Failed to connect to %s (%d)",
-              _address.c_str(),
-              err);
-    ::close(_sock); _sock = -1;
-    return err;
-  }
-
-  ::freeaddrinfo(ai); ai = NULL;
-
-  return 0;
 }
 
 void Memcached::Connection::disconnect()
@@ -432,3 +384,64 @@ Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
 
   return Memcached::Status::OK;
 }
+
+Memcached::ClientConnection::ClientConnection(const std::string& address) :
+  Connection()
+{
+  _address = address;
+}
+
+int Memcached::ClientConnection::connect()
+{
+  struct addrinfo ai_hint;
+  memset(&ai_hint, 0x00, sizeof(ai_hint));
+  ai_hint.ai_family = AF_UNSPEC;
+  ai_hint.ai_socktype = SOCK_STREAM;
+
+  std::string host;
+  int port;
+  if (!::Utils::split_host_port(_address, host, port))
+  {
+    return -1;
+  }
+
+  struct addrinfo* ai;
+  int rc = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &ai_hint, &ai);
+  if (rc < 0)
+  {
+    TRC_ERROR("Failed to resolve hostname %s (%s)",
+              _address.c_str(),
+              gai_strerror(rc));
+    return rc;
+  }
+
+  _sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+  if (_sock < 0)
+  {
+    int err = errno;
+    TRC_ERROR("Failed to create socket (%d)", err);
+    return err;
+  }
+
+  if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
+  {
+    int err = errno;
+    TRC_ERROR("Failed to connect to %s (%d)",
+              _address.c_str(),
+              err);
+    ::close(_sock); _sock = -1;
+    return err;
+  }
+
+  ::freeaddrinfo(ai); ai = NULL;
+
+  return 0;
+}
+
+Memcached::ServerConnection::ServerConnection(int sock, const std::string& address) :
+  Connection()
+{
+  _sock = sock;
+  _address = address;
+}
+

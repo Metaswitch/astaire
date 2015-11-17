@@ -234,7 +234,7 @@ void* Astaire::tap_buckets_thread(void *data)
   Astaire::TapBucketsThreadData* tap_data =
     (Astaire::TapBucketsThreadData*)data;
 
-  Memcached::Connection local_conn(tap_data->local_server);
+  Memcached::ClientConnection local_conn(tap_data->local_server);
   int rc = local_conn.connect();
   if (rc != 0)
   {
@@ -244,7 +244,7 @@ void* Astaire::tap_buckets_thread(void *data)
     return data;
   }
 
-  Memcached::Connection tap_conn(tap_data->tap_server);
+  Memcached::ClientConnection tap_conn(tap_data->tap_server);
   rc = tap_conn.connect();
   if (rc != 0)
   {
@@ -871,7 +871,7 @@ bool Astaire::local_req_rsp(Memcached::BaseReq* req,
                             Memcached::BaseRsp** rsp_ptr)
 {
   // Create a connection to the local memcached.
-  Memcached::Connection local_conn(_self);
+  Memcached::ClientConnection local_conn(_self);
   int rc = local_conn.connect();
   if (rc != 0)
   {

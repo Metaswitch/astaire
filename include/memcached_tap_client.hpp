@@ -374,19 +374,33 @@ namespace Memcached
   class Connection
   {
   public:
-    Connection(const std::string& address);
-    ~Connection();
-
-    int connect();
     void disconnect();
 
     bool send(const BaseMessage& msg);
     Status recv(BaseMessage** msg);
 
-  private:
-    const std::string _address;
+    std::string address() { return _address; }
+
+  protected:
+    Connection();
+    virtual ~Connection();
+
+    std::string _address;
     int _sock;
     std::string _buffer;
+  };
+
+  class ClientConnection : public Connection
+  {
+  public:
+    ClientConnection(const std::string& address);
+    int connect();
+  };
+
+  class ServerConnection : public Connection
+  {
+  public:
+    ServerConnection(int sock, const std::string& address);
   };
 
   // Entry point for parsing messages off the wire.
