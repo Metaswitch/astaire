@@ -55,7 +55,8 @@ TARGET_SOURCES := memcached_tap_client.cpp \
                   utils.cpp \
                   logger.cpp \
                   log.cpp \
-                  alarm.cpp
+                  alarm.cpp \
+                  proxy_server.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
@@ -63,7 +64,7 @@ TARGET_SOURCES_BUILD := main.cpp
 
 #TARGET_EXTRA_OBJS_TEST := gmock-all.o \
 #                          gtest-all.o
- 
+
 #TEST_XML = $(TEST_OUT_DIR)/test_detail_$(TARGET_TEST).xml
 #COVERAGE_XML = $(TEST_OUT_DIR)/coverage_$(TARGET_TEST).xml
 #COVERAGE_LIST_TMP = $(TEST_OUT_DIR)/coverage_list_tmp
@@ -152,7 +153,7 @@ COVERAGEFLAGS = $(OBJ_DIR_TEST) --object-directory=$(shell pwd) --root=${ROOT} \
 build: ${ROOT}/usr/include/astaire_alarmdefinition.h
 
 include ${MK_DIR}/platform.mk
-include ${ROOT}/modules/cpp-common/makefiles/alarm-utils.mk 
+include ${ROOT}/modules/cpp-common/makefiles/alarm-utils.mk
 
 .PHONY: stage-build
 stage-build: build

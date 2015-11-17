@@ -40,6 +40,7 @@
 #include "astaire_statistics.hpp"
 #include "logger.h"
 #include "astaire_alarmdefinition.h"
+#include "proxy_server.hpp"
 
 #include <sstream>
 #include <getopt.h>
@@ -269,6 +270,14 @@ int main(int argc, char** argv)
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
+  // Start the memcached proxy server.
+  ProxyServer* proxy_server = new ProxyServer();
+  if (!proxy_server->start())
+  {
+    TRC_ERROR("Could not start proxy server, exiting");
+    return 3;
+  }
+
   // Start Astaire last as this might cause a resync to happen synchronously.
   Astaire* astaire = new Astaire(view,
                                  view_cfg,
@@ -283,6 +292,7 @@ int main(int argc, char** argv)
 
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
+  delete proxy_server; proxy_server = NULL;
   delete per_conn_stats;
   delete global_stats;
   delete lvc;
