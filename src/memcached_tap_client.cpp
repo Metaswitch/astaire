@@ -169,7 +169,10 @@ std::string Memcached::BaseMessage::to_wire() const
   // Values sections.
   uint32_t body_size = extra.length() + _key.length() + value.length();
 
-  Utils::write((uint8_t)0x80, ss); // Magic byte (0x80 - REQUEST)
+  // In the memcache protocol the first byte (aka the "magic" byte) is 0x80 for
+  // a request and 0x81 for a response.
+  uint8_t magic_byte = is_request() ? 0x80 : 0x81;
+  Utils::write(magic_byte, ss);
   Utils::write((uint8_t)_op_code, ss);
   Utils::write((uint16_t)_key.length(), ss);
   Utils::write((uint8_t)extra.length(), ss);
