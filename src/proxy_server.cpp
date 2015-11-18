@@ -61,8 +61,9 @@ bool ProxyServer::start()
 
   TRC_STATUS("Starting proxy server on port %d", port);
 
-  // Create a new listening socket.
-  _listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+  // Create a new listening socket. Use IPv6 by default as this allows IPv4
+  // connections as well.
+  _listen_sock = socket(AF_INET6, SOCK_STREAM, 0);
   if (_listen_sock < 0)
   {
     TRC_ERROR("Could not create listen socket: %d, %s", _listen_sock, strerror(errno));
@@ -81,11 +82,9 @@ bool ProxyServer::start()
   }
 
   // Bind to the specified port on the any address.
-  struct sockaddr_in bind_addr;
-  bind_addr.sin_family = AF_INET;
-  bind_addr.sin_port = htons(port);
-  bind_addr.sin_addr.s_addr = INADDR_ANY;
-  memset(bind_addr.sin_zero, 0, sizeof(bind_addr.sin_zero));
+  struct sockaddr_in6 bind_addr = {0};
+  bind_addr.sin6_family = AF_INET6;
+  bind_addr.sin6_port = htons(port);
 
   rc = bind(_listen_sock,
             (struct sockaddr*)&(bind_addr),
