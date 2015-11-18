@@ -264,6 +264,15 @@ int main(int argc, char** argv)
   MemcachedConfigReader* view_cfg =
     new MemcachedConfigFileReader(options.cluster_settings_file);
 
+  // Check that the cluster settings are valid. If they are not nothing is
+  // going to work and it is better to restart and have monit alarm.
+  MemcachedConfig dummy_cfg;
+  if (!view_cfg->read_config(dummy_cfg))
+  {
+    TRC_ERROR("Cluster view config is invalid. Exiting");
+    return 3;
+  }
+
   // Create statistics infrastructure.
   std::string stats[] = { "astaire_global", "astaire_connections" };
   LastValueCache* lvc = new LastValueCache(2, stats, "astaire");
@@ -277,7 +286,7 @@ int main(int argc, char** argv)
   if (!proxy_server->start())
   {
     TRC_ERROR("Could not start proxy server, exiting");
-    return 3;
+    return 4;
   }
 
   // Start Astaire last as this might cause a resync to happen synchronously.
