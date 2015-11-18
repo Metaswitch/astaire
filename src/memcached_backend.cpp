@@ -536,17 +536,6 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
   (void)clock_gettime(CLOCK_REALTIME, &ts);
   uint32_t flags = (uint32_t)((ts.tv_sec * 1000) + (ts.tv_nsec / 1000000));
 
-  // Memcached uses a flexible mechanism for specifying expiration.
-  // - 0 indicates never expire.
-  // - <= MEMCACHED_EXPIRATION_MAXDELTA indicates a relative (delta) time.
-  // - > MEMCACHED_EXPIRATION_MAXDELTA indicates an absolute time.
-  // Absolute time is the only way to force immediate expiry.  Unfortunately,
-  // it's not reliable - see https://github.com/Metaswitch/cpp-common/issues/160
-  // for details.  Instead, we use relative time for future times (expiry > 0)
-  // and the earliest absolute time for immediate expiry (expiry == 0).
-  time_t memcached_expiration =
-    (time_t)((expiry > 0) ? expiry : MEMCACHED_EXPIRATION_MAXDELTA + 1);
-
   // First try to write the primary data record to the first responding
   // server.
   memcached_return_t rc = MEMCACHED_ERROR;
@@ -592,7 +581,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
                             vbucket,
                             data.data(),
                             data.length(),
-                            memcached_expiration,
+                            expiry,
                             flags);
     }
     else if (operation == Memcached::OpCode::SET)
@@ -603,7 +592,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
                             vbucket,
                             data.data(),
                             data.length(),
-                            memcached_expiration,
+                            expiry,
                             flags);
     }
     else  // Memcached::OpCode::REPLACE
@@ -616,7 +605,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
                                   vbucket,
                                   data.data(),
                                   data.length(),
-                                  memcached_expiration,
+                                  expiry,
                                   flags);
       }
       else
@@ -627,7 +616,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
                               vbucket,
                               data.data(),
                               data.length(),
-                              memcached_expiration,
+                              expiry,
                               flags,
                               cas);
 
@@ -681,7 +670,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
                        vbucket,
                        data.data(),
                        data.length(),
-                       memcached_expiration,
+                       expiry,
                        flags);
       memcached_behavior_set(replicas[jj], MEMCACHED_BEHAVIOR_NOREPLY, 0);
     }
