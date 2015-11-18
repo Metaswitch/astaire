@@ -56,6 +56,7 @@ ProxyServer::~ProxyServer()
 
 bool ProxyServer::start()
 {
+  int rc;
   uint16_t port = 11311;
 
   TRC_STATUS("Starting proxy server on port %d", port);
@@ -68,6 +69,17 @@ bool ProxyServer::start()
     return false;
   }
 
+  // Set the SO_REUSEADDR socket option so that if we restart the kernel will
+  // allow us to bind to same port we were using before.
+  int enable = 1;
+  rc = setsockopt(_listen_sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
+
+  if (rc < 0)
+  {
+    TRC_ERROR("Error setting SO_REUSEADDR: %d, %s", rc, strerror(errno));
+    return false;
+  }
+
   // Bind to the specified port on the any address.
   struct sockaddr_in bind_addr;
   bind_addr.sin_family = AF_INET;
@@ -75,12 +87,12 @@ bool ProxyServer::start()
   bind_addr.sin_addr.s_addr = INADDR_ANY;
   memset(bind_addr.sin_zero, 0, sizeof(bind_addr.sin_zero));
 
-  int rc = bind(_listen_sock,
-                (struct sockaddr*)&(bind_addr),
-                sizeof(bind_addr));
+  rc = bind(_listen_sock,
+            (struct sockaddr*)&(bind_addr),
+            sizeof(bind_addr));
   if (rc < 0)
   {
-    TRC_ERROR("Could not bind listen socket: %d, %s", rc, strerror(rc));
+    TRC_ERROR("Could not bind listen socket: %d, %s", rc, strerror(errno));
     return false;
   }
 
@@ -88,7 +100,7 @@ bool ProxyServer::start()
   rc = listen(_listen_sock, 5);
   if (rc < 0)
   {
-    TRC_ERROR("Could not listen on socket: %d, %s", rc, strerror(rc));
+    TRC_ERROR("Could not listen on socket: %d, %s", rc, strerror(errno));
     return false;
   }
 
@@ -127,7 +139,7 @@ void ProxyServer::listen_thread_fn()
     {
       // There isn't really any way to recover from accept failing. Just exit,
       // and hope that things start working when we restart.
-      TRC_ERROR("Error accepting socket: %d, %s", sock, strerror(sock));
+      TRC_ERROR("Error accepting socket: %d, %s", sock, strerror(errno));
       exit(1);
     }
     else
