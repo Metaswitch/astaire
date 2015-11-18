@@ -117,7 +117,8 @@ LDFLAGS += -lmemcached \
            -lboost_filesystem \
            -lboost_system \
            -lrt \
-           -lzmq
+           -lzmq \
+           -lsas
 
 # Test build uses just-built libraries, which may not be installed
 #LDFLAGS_TEST += -Wl,-rpath=$(ROOT)/usr/lib
