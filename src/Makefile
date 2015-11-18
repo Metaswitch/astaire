@@ -56,7 +56,8 @@ TARGET_SOURCES := memcached_tap_client.cpp \
                   logger.cpp \
                   log.cpp \
                   alarm.cpp \
-                  proxy_server.cpp
+                  proxy_server.cpp \
+                  memcached_backend.cpp
 
 TARGET_SOURCES_BUILD := main.cpp
 
