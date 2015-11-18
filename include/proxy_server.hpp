@@ -61,18 +61,33 @@ private:
     ProxyServer* server;
     Memcached::ServerConnection* connection;
   };
-
   static void* connection_thread_entry_point(void* params);
   void connection_thread_fn(Memcached::ServerConnection* connection);
 
+  /// Handle a GET request from the client.
+  ///
+  /// @param get_req    - The received request. This function takes ownership.
+  /// @param connection - The connection the request was received one and
+  ///                     should be used for sending a response.
   void handle_get(Memcached::GetReq* get_req,
                   Memcached::ServerConnection* connection);
 
+  /// Handle a SET/ADD/REPLACE request from the client.
+  ///
+  /// @param sar_req    - The received request. This function takes ownership.
+  /// @param connection - The connection the request was received one and
+  ///                     should be used for sending a response.
   void handle_set_add_replace(Memcached::SetAddReplaceReq* sar_req,
                               Memcached::ServerConnection* connection);
 
+  /// Handle a DELETE request from the client.
+  ///
+  /// @param delete_req - The received request. This function takes ownership.
+  /// @param connection - The connection the request was received one and
+  ///                     should be used for sending a response.
   void handle_delete(Memcached::DeleteReq* delete_req,
                      Memcached::ServerConnection* connection);
+
   /// Socket on which the server listens for new connections.
   int _listen_sock;
 
@@ -81,7 +96,6 @@ private:
 
   /// The class used to access the local cluster of memcached instances.
   MemcachedBackend* _backend;
-
 };
 
 #endif
