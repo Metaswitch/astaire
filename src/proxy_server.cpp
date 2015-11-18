@@ -194,7 +194,7 @@ void* ProxyServer::connection_thread_entry_point(void* connection_param)
       if (msg->is_request())
       {
         Memcached::BaseReq* req = dynamic_cast<Memcached::BaseReq*>(msg);
-        TRC_DEBUG("Received request with type: %d", req->op_code());
+        TRC_DEBUG("Received request with type: 0x%x", req->op_code());
 
         switch (req->op_code())
         {
@@ -258,8 +258,7 @@ void* ProxyServer::connection_thread_entry_point(void* connection_param)
       {
         // We shouldn't receive responses. Break out of the loop so we'll close
         // the connection.
-        Memcached::BaseRsp* rsp = dynamic_cast<Memcached::BaseRsp*>(msg);
-        TRC_WARNING("Received unexpected response with type: %d", msg->op_code());
+        TRC_WARNING("Received unexpected response with type: 0x%x", msg->op_code());
         keep_going = false;
       }
 
