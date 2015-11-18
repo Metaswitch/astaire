@@ -44,8 +44,9 @@
 #include "memcached_tap_client.hpp"
 #include "proxy_server.hpp"
 
-ProxyServer::ProxyServer() :
-  _listen_sock(0)
+ProxyServer::ProxyServer(MemcachedBackend* backend) :
+  _listen_sock(0),
+  _backend(backend)
 {
 }
 
@@ -162,11 +163,15 @@ void ProxyServer::listen_thread_fn()
       Memcached::ServerConnection* connection =
         new Memcached::ServerConnection(sock, addr_string);
 
+      ConnectionThreadParams* params = new ConnectionThreadParams;
+      params->server = this;
+      params->connection = connection;
+
       pthread_t tid;
       int rc = pthread_create(&tid,
                               NULL,
                               connection_thread_entry_point,
-                              connection);
+                              params);
       if (rc < 0)
       {
         // Couldn't create a thread to handle this connection. Just close it.
@@ -177,9 +182,16 @@ void ProxyServer::listen_thread_fn()
   }
 }
 
-void* ProxyServer::connection_thread_entry_point(void* connection_param)
+void* ProxyServer::connection_thread_entry_point(void* params_arg)
 {
-  Memcached::ServerConnection* connection = (Memcached::ServerConnection*)connection_param;
+  ConnectionThreadParams* params = (ConnectionThreadParams*)params_arg;
+  params->server->connection_thread_fn(params->connection);
+  delete params; params = NULL;
+  return NULL;
+}
+
+void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)
+{
   bool keep_going = true;
 
   TRC_STATUS("Starting connection thread for %s", connection->address().c_str());
@@ -201,14 +213,7 @@ void* ProxyServer::connection_thread_entry_point(void* connection_param)
         case (uint8_t)Memcached::OpCode::GET:
           {
             Memcached::GetReq* get_req = dynamic_cast<Memcached::GetReq*>(msg);
-            Memcached::GetRsp* get_rsp =
-              new Memcached::GetRsp((uint16_t)Memcached::ResultCode::NO_ERROR,
-                                    get_req->opaque(),
-                                    get_req->cas(),
-                                    "hello",
-                                    0);
-            connection->send(*get_rsp);
-            delete get_rsp; get_rsp = NULL;
+            handle_get(get_req, connection);
           }
           break;
 
@@ -216,22 +221,17 @@ void* ProxyServer::connection_thread_entry_point(void* connection_param)
         case (uint8_t)Memcached::OpCode::SET:
         case (uint8_t)Memcached::OpCode::REPLACE:
           {
-            Memcached::SetAddReplaceRsp* sar_rsp =
-              new Memcached::SetAddReplaceRsp((uint8_t)req->op_code(),
-                                              (uint16_t)Memcached::ResultCode::NO_ERROR,
-                                              req->opaque());
-            connection->send(*sar_rsp);
-            delete sar_rsp; sar_rsp = NULL;
+            Memcached::SetAddReplaceReq* sar_req =
+              dynamic_cast<Memcached::SetAddReplaceReq*>(msg);
+            handle_set_add_replace(sar_req, connection);
           }
           break;
 
         case (uint8_t)Memcached::OpCode::DELETE:
           {
-            Memcached::DeleteRsp* delete_rsp =
-              new Memcached::DeleteRsp((uint16_t)Memcached::ResultCode::NO_ERROR,
-                                       req->opaque());
-            connection->send(*delete_rsp);
-            delete delete_rsp; delete_rsp = NULL;
+            Memcached::DeleteReq* delete_req =
+              dynamic_cast<Memcached::DeleteReq*>(msg);
+            handle_delete(delete_req, connection);
           }
           break;
 
@@ -280,6 +280,57 @@ void* ProxyServer::connection_thread_entry_point(void* connection_param)
   // If we fall out of the above loop for any reason, we should close the
   // connection.
   delete connection; connection = NULL;
+}
 
-  return NULL;
+void ProxyServer::handle_get(Memcached::GetReq* get_req,
+                             Memcached::ServerConnection* connection)
+{
+  Memcached::ResultCode status;
+  std::string value;
+  uint64_t cas;
+
+  status = _backend->read_data(get_req->key(), value, cas, 0);
+
+  Memcached::GetRsp* get_rsp =
+    new Memcached::GetRsp((uint16_t)status,
+                          get_req->opaque(),
+                          cas,
+                          value,
+                          0);
+  connection->send(*get_rsp);
+  delete get_rsp; get_rsp = NULL;
+}
+
+void ProxyServer::handle_set_add_replace(Memcached::SetAddReplaceReq* sar_req,
+                                         Memcached::ServerConnection* connection)
+{
+  Memcached::ResultCode status;
+
+  status = _backend->write_data((Memcached::OpCode)sar_req->op_code(),
+                                sar_req->key(),
+                                sar_req->value(),
+                                sar_req->cas(),
+                                sar_req->expiry(),
+                                0);
+
+  Memcached::SetAddReplaceRsp* sar_rsp =
+    new Memcached::SetAddReplaceRsp((uint8_t)sar_req->op_code(),
+                                    (uint16_t)status,
+                                    sar_req->opaque());
+  connection->send(*sar_rsp);
+  delete sar_rsp; sar_rsp = NULL;
+}
+
+void ProxyServer::handle_delete(Memcached::DeleteReq* delete_req,
+                                Memcached::ServerConnection* connection)
+{
+  Memcached::ResultCode status;
+
+  status = _backend->delete_data(delete_req->key(), 0);
+
+  Memcached::DeleteRsp* delete_rsp =
+    new Memcached::DeleteRsp((uint16_t)status, delete_req->opaque());
+
+  connection->send(*delete_rsp);
+  delete delete_rsp; delete_rsp = NULL;
 }

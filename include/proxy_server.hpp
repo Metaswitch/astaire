@@ -34,10 +34,15 @@
  * as those licenses appear in the file LICENSE-OPENSSL.
  */
 
+#ifndef PROXY_SERVER_HPP__
+#define PROXY_SERVER_HPP__
+
+#include "memcached_backend.hpp"
+
 class ProxyServer
 {
 public:
-  ProxyServer();
+  ProxyServer(MemcachedBackend* backend);
   virtual ~ProxyServer();
 
   /// Start the proxy server.
@@ -51,11 +56,32 @@ private:
   void listen_thread_fn();
 
   /// Entry points for the per-connection threads.
-  static void* connection_thread_entry_point(void* connection_param);
+  struct ConnectionThreadParams
+  {
+    ProxyServer* server;
+    Memcached::ServerConnection* connection;
+  };
 
+  static void* connection_thread_entry_point(void* params);
+  void connection_thread_fn(Memcached::ServerConnection* connection);
+
+  void handle_get(Memcached::GetReq* get_req,
+                  Memcached::ServerConnection* connection);
+
+  void handle_set_add_replace(Memcached::SetAddReplaceReq* sar_req,
+                              Memcached::ServerConnection* connection);
+
+  void handle_delete(Memcached::DeleteReq* delete_req,
+                     Memcached::ServerConnection* connection);
   /// Socket on which the server listens for new connections.
   int _listen_sock;
 
   /// The thread that accepts connections on the listening socket.
   pthread_t _listen_thread;
+
+  /// The class used to access the local cluster of memcached instances.
+  MemcachedBackend* _backend;
+
 };
+
+#endif

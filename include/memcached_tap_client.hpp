@@ -292,6 +292,9 @@ namespace Memcached
                      uint32_t flags,
                      uint32_t expiry);
 
+    uint32_t expiry() const { return _expiry; }
+    std::string value() const { return _value; }
+
   protected:
     std::string generate_extra() const;
     std::string generate_value() const;
@@ -307,8 +310,11 @@ namespace Memcached
   public:
     SetAddReplaceRsp(const std::string& msg) : BaseRsp(msg) {};
 
-    SetAddReplaceRsp(uint8_t command, uint8_t status, uint32_t opaque) :
-      BaseRsp(command, "", status, opaque, 0)
+    SetAddReplaceRsp(uint8_t command,
+                     uint8_t status,
+                     uint32_t opaque,
+                     uint64_t cas = 0) :
+      BaseRsp(command, "", status, opaque, cas)
     {};
   };
 

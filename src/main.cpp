@@ -270,8 +270,10 @@ int main(int argc, char** argv)
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
+  MemcachedBackend* backend = new MemcachedBackend(view_cfg);
+
   // Start the memcached proxy server.
-  ProxyServer* proxy_server = new ProxyServer();
+  ProxyServer* proxy_server = new ProxyServer(backend);
   if (!proxy_server->start())
   {
     TRC_ERROR("Could not start proxy server, exiting");
@@ -293,6 +295,7 @@ int main(int argc, char** argv)
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
   delete proxy_server; proxy_server = NULL;
+  delete backend; backend = NULL;
   delete per_conn_stats;
   delete global_stats;
   delete lvc;

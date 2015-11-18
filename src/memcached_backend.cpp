@@ -103,9 +103,8 @@ MemcachedBackend::MemcachedBackend(MemcachedConfigReader* config_reader,
 
 MemcachedBackend::~MemcachedBackend()
 {
-  // Destroy the updater (if it was created) and the config reader.
+  // Destroy the updater.
   delete _updater; _updater = NULL;
-  delete _config_reader; _config_reader = NULL;
 
   // Clean up this thread's connection now, rather than waiting for
   // pthread_exit.  This is to support use by single-threaded code
