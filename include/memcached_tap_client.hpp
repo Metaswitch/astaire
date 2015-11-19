@@ -236,6 +236,9 @@ namespace Memcached
   public:
     GetReq(const std::string& msg) : BaseReq(msg) {}
 
+    // This constructor explicitly takes an opaque parameter to distinguish it
+    // from the previous constructor (which initializes a GET request from a
+    // message buffer).
     GetReq(std::string key, uint32_t opaque) :
       BaseReq((uint8_t)OpCode::GET, key, 0, opaque, 0)
     {}
@@ -266,6 +269,10 @@ namespace Memcached
   {
   public:
     DeleteReq(const std::string& msg) : BaseReq(msg) {}
+
+    // This constructor explicitly takes an opaque parameter to distinguish it
+    // from the previous constructor (which initializes a GET request from a
+    // message buffer).
     DeleteReq(std::string key, uint32_t opaque) :
       BaseReq((uint8_t)OpCode::DELETE, key, 0, opaque, 0)
     {}
