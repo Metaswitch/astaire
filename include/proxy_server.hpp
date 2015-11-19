@@ -64,25 +64,29 @@ private:
   static void* connection_thread_entry_point(void* params);
   void connection_thread_fn(Memcached::ServerConnection* connection);
 
-  /// Handle a GET request from the client.
+  /// Handle a GET request from the client and send an appropriate response.
   ///
-  /// @param get_req    - The received request. This function takes ownership.
+  /// @param get_req    - The received request. This function does not take
+  ///                     ownership.
   /// @param connection - The connection the request was received one and
   ///                     should be used for sending a response.
   void handle_get(Memcached::GetReq* get_req,
                   Memcached::ServerConnection* connection);
 
-  /// Handle a SET/ADD/REPLACE request from the client.
+  /// Handle a SET/ADD/REPLACE request from the client and send an appropriate
+  /// response.
   ///
-  /// @param sar_req    - The received request. This function takes ownership.
+  /// @param sar_req    - The received request. This function does not take
+  ///                     ownership.
   /// @param connection - The connection the request was received one and
   ///                     should be used for sending a response.
   void handle_set_add_replace(Memcached::SetAddReplaceReq* sar_req,
                               Memcached::ServerConnection* connection);
 
-  /// Handle a DELETE request from the client.
+  /// Handle a DELETE request from the client and send an appropriate response.
   ///
-  /// @param delete_req - The received request. This function takes ownership.
+  /// @param delete_req - The received request. This function does not take
+  ///                     ownership.
   /// @param connection - The connection the request was received one and
   ///                     should be used for sending a response.
   void handle_delete(Memcached::DeleteReq* delete_req,
