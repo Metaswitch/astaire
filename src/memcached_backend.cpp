@@ -478,7 +478,6 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
     TRC_ERROR("Failed to read data for %s from %d replicas",
               key.c_str(), replicas.size());
 
-    // TODO proper status code mapping.
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
 
     update_vbucket_comm_state(vbucket, FAILED);
@@ -634,7 +633,8 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
       TRC_DEBUG("Conditional write succeeded to replica %d", replica_idx);
       break;
     }
-    else if ((rc == MEMCACHED_NOTSTORED) ||
+    else if ((rc == MEMCACHED_NOTFOUND) ||
+             (rc == MEMCACHED_NOTSTORED) ||
              (rc == MEMCACHED_DATA_EXISTS))
     {
       if (trail != 0)
@@ -644,13 +644,11 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
         SAS::report_event(err);
       }
 
-      // A NOT_STORED or EXISTS response indicates a concurrent write failure,
-      // so return this to the application immediately - don't go on to
+      // A NOT_FOUND, NOT_STORED or EXISTS response indicates a concurrent write
+      // failure, so return this to the application immediately - don't go on to
       // other replicas.
       TRC_INFO("Contention writing data for %s to store", key.c_str());
-      status = ((rc == MEMCACHED_NOTSTORED) ?
-                Memcached::ResultCode::ITEM_NOT_STORED :
-                Memcached::ResultCode::KEY_EXISTS);
+      status = libmemcached_result_to_memcache_status(rc);
       break;
     }
   }
@@ -676,6 +674,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
   }
 
   if ((!memcached_success(rc)) &&
+      (rc != MEMCACHED_NOTFOUND) &&
       (rc != MEMCACHED_NOTSTORED) &&
       (rc != MEMCACHED_DATA_EXISTS))
   {
@@ -696,7 +695,6 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
     TRC_ERROR("Failed to write data for %s to %d replicas",
               key.c_str(), replicas.size());
 
-    // TODO better result code mapping.
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
   }
   else
@@ -717,6 +715,8 @@ Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key,
                                                     SAS::TrailId trail)
 {
   TRC_DEBUG("Deleting key %s", key.c_str());
+
+  Memcached::ResultCode best_status = Memcached::ResultCode::TEMPORARY_FAILURE;
 
   // Delete from the read replicas - read replicas are a superset of the write
   // replicas
@@ -756,10 +756,19 @@ Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key,
         event.add_static_param(replicas.size());
         SAS::report_event(event);
       }
+
+      if (best_status != Memcached::ResultCode::NO_ERROR)
+      {
+        best_status = libmemcached_result_to_memcache_status(rc);
+      }
+    }
+    else
+    {
+      best_status = Memcached::ResultCode::NO_ERROR;
     }
   }
 
-  return Memcached::ResultCode::NO_ERROR;
+  return best_status;
 }
 
 
@@ -801,6 +810,33 @@ memcached_return_t MemcachedBackend::get_from_replica(memcached_st* replica,
   }
 
   return rc;
+}
+
+Memcached::ResultCode
+MemcachedBackend::libmemcached_result_to_memcache_status(memcached_return_t rc)
+{
+  Memcached::ResultCode status;
+
+  switch (rc)
+  {
+  case MEMCACHED_NOTFOUND:
+    status = Memcached::ResultCode::KEY_NOT_FOUND;
+    break;
+
+  case MEMCACHED_DATA_EXISTS:
+    status = Memcached::ResultCode::KEY_EXISTS;
+    break;
+
+  case MEMCACHED_NOTSTORED:
+    status = Memcached::ResultCode::ITEM_NOT_STORED;
+    break;
+
+  default:
+    status = Memcached::ResultCode::TEMPORARY_FAILURE;
+    break;
+  }
+
+  return status;
 }
 
 // LCOV_EXCL_STOP

@@ -136,6 +136,20 @@ private:
                                       std::string& data,
                                       uint64_t& cas);
 
+  // Utility function to turn a return code from libmemcached back into a status
+  // code that can be used in the binary protocol.
+  //
+  // Note that libmemcached itself only converts a subset of memcache errors to
+  // distinct error codes. This is OK as the only errors we actually care about
+  // are KEY_NOT_FOUND, KEY_EXISTS and ITEM_NOT_STORED, which are a subset of
+  // the ones libmemcached copes with.  We convert everything else to
+  // TEMPORARY_FAILURE.
+  //
+  // @param rc - The memcached result code to convert.
+  // @return   - The corresponding memcache status code.
+  static Memcached::ResultCode
+    libmemcached_result_to_memcache_status(memcached_return_t rc);
+
   // Stores a pointer to an updater object
   Updater<void, MemcachedBackend>* _updater;
 

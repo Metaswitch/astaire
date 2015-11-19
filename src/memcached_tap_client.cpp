@@ -250,7 +250,13 @@ Memcached::GetRsp::GetRsp(uint16_t status,
 std::string Memcached::GetRsp::generate_extra() const
 {
   std::string extras_string;
-  Utils::write(_flags, extras_string);
+
+  // Only add the flags if a result has been found.
+  if (_status == (uint16_t)ResultCode::NO_ERROR)
+  {
+    Utils::write(_flags, extras_string);
+  }
+
   return extras_string;
 }
 
