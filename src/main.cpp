@@ -41,6 +41,7 @@
 #include "logger.h"
 #include "utils.h"
 #include "astaire_alarmdefinition.h"
+#include "proxy_server.hpp"
 
 #include <sstream>
 #include <getopt.h>
@@ -284,11 +285,30 @@ int main(int argc, char** argv)
   MemcachedConfigReader* view_cfg =
     new MemcachedConfigFileReader(options.cluster_settings_file);
 
+  // Check that the cluster settings are valid. If they are not nothing is
+  // going to work and it is better to restart and have monit alarm.
+  MemcachedConfig dummy_cfg;
+  if (!view_cfg->read_config(dummy_cfg))
+  {
+    TRC_ERROR("Cluster view config is invalid. Exiting");
+    return 3;
+  }
+
   // Create statistics infrastructure.
   std::string stats[] = { "astaire_global", "astaire_connections" };
   LastValueCache* lvc = new LastValueCache(2, stats, "astaire");
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
+
+  MemcachedBackend* backend = new MemcachedBackend(view_cfg);
+
+  // Start the memcached proxy server.
+  ProxyServer* proxy_server = new ProxyServer(backend);
+  if (!proxy_server->start())
+  {
+    TRC_ERROR("Could not start proxy server, exiting");
+    return 4;
+  }
 
   // Start Astaire last as this might cause a resync to happen synchronously.
   Astaire* astaire = new Astaire(view,
@@ -304,6 +324,8 @@ int main(int argc, char** argv)
 
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
+  delete proxy_server; proxy_server = NULL;
+  delete backend; backend = NULL;
   delete per_conn_stats;
   delete global_stats;
   delete lvc;
