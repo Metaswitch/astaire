@@ -109,6 +109,7 @@ bool Memcached::from_wire(std::string& msg,
       output = from_wire_int<Memcached::TapMutateReq>(msg);
       break;
     case (uint8_t)OpCode::GET:
+    case (uint8_t)OpCode::GETK:
       output = from_wire_int<Memcached::GetReq>(msg);
       break;
     case (uint8_t)OpCode::SET:
@@ -208,6 +209,11 @@ Memcached::BaseRsp::BaseRsp(const std::string& msg) : BaseMessage(msg)
   _status = HDR_GET(msg.data(), vbucket_or_status);
 }
 
+bool Memcached::GetReq::response_needs_key() const
+{
+  return (_op_code == (uint8_t)OpCode::GETK);
+}
+
 Memcached::GetRsp::GetRsp(const std::string& msg) : BaseRsp(msg)
 {
   const char* raw = msg.data();
@@ -226,11 +232,19 @@ Memcached::GetRsp::GetRsp(uint16_t status,
                           uint32_t opaque,
                           uint64_t cas,
                           const std::string& value,
-                          uint32_t flags) :
+                          uint32_t flags,
+                          const std::string& key) :
   BaseRsp((uint8_t)OpCode::GET, "", status, opaque, cas),
   _value(value),
   _flags(flags)
 {
+  if (!key.empty())
+  {
+    // We've been passed a key to put on the response. This means we need to
+    // send a GETK response rather than a GET.
+    _op_code = (uint8_t)OpCode::GETK;
+    _key = key;
+  }
 }
 
 std::string Memcached::GetRsp::generate_extra() const

@@ -222,6 +222,7 @@ void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)
         switch (req->op_code())
         {
         case (uint8_t)Memcached::OpCode::GET:
+        case (uint8_t)Memcached::OpCode::GETK:
           {
             Memcached::GetReq* get_req = dynamic_cast<Memcached::GetReq*>(msg);
             handle_get(get_req, connection);
@@ -298,16 +299,23 @@ void ProxyServer::handle_get(Memcached::GetReq* get_req,
 {
   Memcached::ResultCode status;
   std::string value;
+  std::string key;
   uint64_t cas;
 
   status = _backend->read_data(get_req->key(), value, cas, 0);
+
+  if (get_req->response_needs_key())
+  {
+    key = get_req->key();
+  }
 
   Memcached::GetRsp* get_rsp =
     new Memcached::GetRsp((uint16_t)status,
                           get_req->opaque(),
                           cas,
                           value,
-                          0);
+                          0,
+                          key);
   connection->send(*get_rsp);
   delete get_rsp; get_rsp = NULL;
 }

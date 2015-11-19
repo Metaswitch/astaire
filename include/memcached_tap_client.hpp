@@ -91,6 +91,7 @@ namespace Memcached
     REPLACE = 0x03,
     DELETE = 0x04,
     VERSION = 0x0b,
+    GETK = 0x0c,
     TAP_CONNECT = 0x40,
     TAP_MUTATE = 0x41,
     SET_VBUCKET = 0x3d
@@ -176,7 +177,6 @@ namespace Memcached
     virtual std::string generate_value() const { return ""; };
     virtual uint16_t generate_vbucket_or_status() const = 0;
 
-  private:
     uint8_t _op_code;
     std::string _key;
     uint32_t _opaque;
@@ -242,6 +242,8 @@ namespace Memcached
     GetReq(std::string key, uint32_t opaque) :
       BaseReq((uint8_t)OpCode::GET, key, 0, opaque, 0)
     {}
+
+    bool response_needs_key() const;
   };
 
   class GetRsp : public BaseRsp
@@ -252,7 +254,8 @@ namespace Memcached
            uint32_t opaque,
            uint64_t cas,
            const std::string& value,
-           uint32_t flags);
+           uint32_t flags,
+           const std::string& key = "");
 
     std::string value() const { return _value; };
     uint32_t flags() const { return _flags; };
