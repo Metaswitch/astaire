@@ -30,3 +30,13 @@ astaire_LDFLAGS := -L../usr/lib \
                    -lzmq
 
 include ../build-infra/cpp.mk
+
+# Alarm definition generation rules
+ROOT := $(abspath $(shell pwd)/../)
+MODULE_DIR := ${ROOT}/modules
+include ../modules/cpp-common/makefiles/alarm-utils.mk
+
+../usr/include/astaire_alarmdefinition.h : ../build/bin/alarm_header ../root/usr/share/clearwater/infrastructure/alarms/astaire_alarms.json
+	$< -j "../root/usr/share/clearwater/infrastructure/alarms/astaire_alarms.json" -n "astaire"
+	mv astaire_alarmdefinition.h $@
+${astaire_OBJECT_DIR}/main.o : ../usr/include/astaire_alarmdefinition.h
