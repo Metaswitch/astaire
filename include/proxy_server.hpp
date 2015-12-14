@@ -48,7 +48,8 @@ public:
   /// Start the proxy server.
   ///
   /// @return - Whether the server started successfully or not.
-  bool start();
+  bool start(struct sockaddr* bind_addr = NULL);
+  bool start(const char* bind_addr);
 
 private:
   /// Entry points for the listener thread.
@@ -91,6 +92,7 @@ private:
   ///                     should be used for sending a response.
   void handle_delete(Memcached::DeleteReq* delete_req,
                      Memcached::ServerConnection* connection);
+
 
   /// Socket on which the server listens for new connections.
   int _listen_sock;

@@ -54,10 +54,60 @@ ProxyServer::~ProxyServer()
 {
 }
 
-bool ProxyServer::start()
+bool ProxyServer::start(const char* bind_addr)
+{
+  if (strlen(bind_addr) == 0)
+  {
+    // If no bind address is given, just bind to all
+    return start();
+  }
+
+  struct sockaddr sa = {0};
+
+  sa.sa_family = AF_INET;
+  int rc = inet_pton(AF_INET, bind_addr, &((struct sockaddr_in*)&(sa))->sin_addr);
+
+  if (rc != 1)
+  {
+    // Try INET6 instead
+    sa.sa_family = AF_INET6;
+    rc = inet_pton(AF_INET6, bind_addr, &((struct sockaddr_in6*)&(sa))->sin6_addr);
+  }
+  
+  if (rc == 1)
+  {
+    return start(&sa);
+  }
+  else
+  {
+    TRC_ERROR("Could not parse address '%s'", bind_addr);
+    return false;
+  }
+}
+
+bool ProxyServer::start(struct sockaddr* bind_addr)
 {
   int rc;
   uint16_t port = 11311;
+    
+  // Set up the any address as a default
+  struct sockaddr_in6 any_addr = {0};
+  any_addr.sin6_family = AF_INET6;
+
+  if (bind_addr == NULL)
+  {
+    bind_addr = (struct sockaddr*)&any_addr;
+  }
+
+  // Bind to the specified port.
+  if (bind_addr->sa_family == AF_INET6)
+  {
+    ((struct sockaddr_in6*)bind_addr)->sin6_port = htons(port);
+  }
+  else if (bind_addr->sa_family == AF_INET)
+  {
+    ((struct sockaddr_in*)bind_addr)->sin_port = htons(port);
+  }
 
   TRC_STATUS("Starting proxy server on port %d", port);
 
@@ -81,14 +131,9 @@ bool ProxyServer::start()
     return false;
   }
 
-  // Bind to the specified port on the any address.
-  struct sockaddr_in6 bind_addr = {0};
-  bind_addr.sin6_family = AF_INET6;
-  bind_addr.sin6_port = htons(port);
-
   rc = bind(_listen_sock,
-            (struct sockaddr*)&(bind_addr),
-            sizeof(bind_addr));
+            (struct sockaddr*)bind_addr,
+            sizeof(struct sockaddr));
   if (rc < 0)
   {
     TRC_ERROR("Could not bind listen socket: %d, %s", rc, strerror(errno));
