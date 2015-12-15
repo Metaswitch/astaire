@@ -54,16 +54,45 @@ ProxyServer::~ProxyServer()
 {
 }
 
-bool ProxyServer::start()
+bool ProxyServer::start(const char* bind_addr)
 {
   int rc;
+  int address_family;
+  struct sockaddr_storage sa = {0};
+  struct sockaddr_in6* sa_in6 = (struct sockaddr_in6*)&sa;
+  struct sockaddr_in* sa_in = (struct sockaddr_in*)&sa;
   uint16_t port = 11311;
+
+  if (strlen(bind_addr) == 0)
+  {
+    // Set up the any address as a default
+    address_family = sa_in6->sin6_family = AF_INET6;
+    sa_in6->sin6_port = htons(port);
+    rc = 1; // Success
+  }
+  else if ((rc = inet_pton(AF_INET, bind_addr, &(sa_in->sin_addr))) == 1)
+  {
+    address_family = sa_in->sin_family = AF_INET;
+    sa_in->sin_port = htons(port);
+  }
+  // If INET fails, try INET6 instead
+  else if ((rc = inet_pton(AF_INET6, bind_addr, &(sa_in6->sin6_addr))) == 1)
+  {
+    address_family = sa_in6->sin6_family = AF_INET6;
+    sa_in6->sin6_port = htons(port);
+  }
+  
+  if (rc != 1)
+  {
+    TRC_ERROR("Could not parse address '%s'", bind_addr);
+    return false;
+  }
 
   TRC_STATUS("Starting proxy server on port %d", port);
 
   // Create a new listening socket. Use IPv6 by default as this allows IPv4
   // connections as well.
-  _listen_sock = socket(AF_INET6, SOCK_STREAM, 0);
+  _listen_sock = socket(address_family, SOCK_STREAM, 0);
   if (_listen_sock < 0)
   {
     TRC_ERROR("Could not create listen socket: %d, %s", _listen_sock, strerror(errno));
@@ -81,14 +110,10 @@ bool ProxyServer::start()
     return false;
   }
 
-  // Bind to the specified port on the any address.
-  struct sockaddr_in6 bind_addr = {0};
-  bind_addr.sin6_family = AF_INET6;
-  bind_addr.sin6_port = htons(port);
-
   rc = bind(_listen_sock,
-            (struct sockaddr*)&(bind_addr),
-            sizeof(bind_addr));
+            (struct sockaddr*)&sa,
+            (address_family == AF_INET) ? sizeof(sockaddr_in6): sizeof(sockaddr_in));
+
   if (rc < 0)
   {
     TRC_ERROR("Could not bind listen socket: %d, %s", rc, strerror(errno));

@@ -51,6 +51,7 @@ struct options
 {
   std::string local_memcached_server;
   std::string cluster_settings_file;
+  std::string bind_addr;
   bool log_to_file;
   std::string log_directory;
   int log_level;
@@ -61,6 +62,7 @@ enum Options
 {
   LOCAL_NAME=256+1,
   CLUSTER_SETTINGS_FILE,
+  BIND_ADDR,
   LOG_FILE,
   LOG_LEVEL,
   PIDFILE,
@@ -71,6 +73,7 @@ const static struct option long_opt[] =
 {
   {"local-name",             required_argument, NULL, LOCAL_NAME},
   {"cluster-settings-file",  required_argument, NULL, CLUSTER_SETTINGS_FILE},
+  {"bind-addr",              required_argument, NULL, BIND_ADDR},
   {"log-file",               required_argument, NULL, LOG_FILE},
   {"log-level",              required_argument, NULL, LOG_LEVEL},
   {"pidfile",                required_argument, NULL, PIDFILE},
@@ -87,6 +90,7 @@ void usage(void)
        " --local-name <hostname>    Specify the name of the local memcached server\n"
        " --cluster-settings-file=<filename>\n"
        "                            The filename of the cluster settings file\n"
+       " --bind-addr=<IP>           The IP address to bind to (default: all)\n"
        " --log-file=<directory>     Log to file in specified directory\n"
        " --log-level=N              Set log level to N (default: 4)\n"
        " --pidfile=<filename>       Write pidfile\n"
@@ -139,6 +143,10 @@ int init_options(int argc, char**argv, struct options& options)
 
     case CLUSTER_SETTINGS_FILE:
       options.cluster_settings_file = optarg;
+      break;
+
+    case BIND_ADDR:
+      options.bind_addr = optarg;
       break;
 
     case PIDFILE:
@@ -211,6 +219,7 @@ int main(int argc, char** argv)
   options.log_directory = "";
   options.local_memcached_server = "";
   options.cluster_settings_file = "";
+  options.bind_addr = "";
   options.pidfile = "";
 
   boost::filesystem::path p = argv[0];
@@ -304,7 +313,8 @@ int main(int argc, char** argv)
 
   // Start the memcached proxy server.
   ProxyServer* proxy_server = new ProxyServer(backend);
-  if (!proxy_server->start())
+  
+  if (!proxy_server->start(options.bind_addr.c_str()))
   {
     TRC_ERROR("Could not start proxy server, exiting");
     return 4;
