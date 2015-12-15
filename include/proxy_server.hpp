@@ -48,7 +48,6 @@ public:
   /// Start the proxy server.
   ///
   /// @return - Whether the server started successfully or not.
-  bool start(struct sockaddr* bind_addr = NULL);
   bool start(const char* bind_addr);
 
 private:
