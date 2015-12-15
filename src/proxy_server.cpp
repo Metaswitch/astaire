@@ -57,7 +57,7 @@ ProxyServer::~ProxyServer()
 bool ProxyServer::start(const char* bind_addr)
 {
   int rc;
-  int sockaddr_size;
+  int address_family;
   struct sockaddr_storage sa = {0};
   struct sockaddr_in6* sa_in6 = (struct sockaddr_in6*)&sa;
   struct sockaddr_in* sa_in = (struct sockaddr_in*)&sa;
@@ -66,23 +66,20 @@ bool ProxyServer::start(const char* bind_addr)
   if (strlen(bind_addr) == 0)
   {
     // Set up the any address as a default
-    sa_in6->sin6_family = AF_INET6;
+    address_family = sa_in6->sin6_family = AF_INET6;
     sa_in6->sin6_port = htons(port);
-    sockaddr_size = sizeof(sockaddr_in6);
     rc = 1; // Success
   }
   else if ((rc = inet_pton(AF_INET, bind_addr, &(sa_in->sin_addr))) == 1)
   {
-    sa_in->sin_family = AF_INET;
+    address_family = sa_in->sin_family = AF_INET;
     sa_in->sin_port = htons(port);
-    sockaddr_size = sizeof(sockaddr_in);
   }
   // If INET fails, try INET6 instead
   else if ((rc = inet_pton(AF_INET6, bind_addr, &(sa_in6->sin6_addr))) == 1)
   {
-    sa_in6->sin6_family = AF_INET6;
+    address_family = sa_in6->sin6_family = AF_INET6;
     sa_in6->sin6_port = htons(port);
-    sockaddr_size = sizeof(sockaddr_in6);
   }
   
   if (rc != 1)
@@ -95,7 +92,7 @@ bool ProxyServer::start(const char* bind_addr)
 
   // Create a new listening socket. Use IPv6 by default as this allows IPv4
   // connections as well.
-  _listen_sock = socket(AF_INET6, SOCK_STREAM, 0);
+  _listen_sock = socket(address_family, SOCK_STREAM, 0);
   if (_listen_sock < 0)
   {
     TRC_ERROR("Could not create listen socket: %d, %s", _listen_sock, strerror(errno));
@@ -115,7 +112,7 @@ bool ProxyServer::start(const char* bind_addr)
 
   rc = bind(_listen_sock,
             (struct sockaddr*)&sa,
-            sockaddr_size);
+            (address_family == AF_INET) ? sizeof(sockaddr_in6): sizeof(sockaddr_in));
 
   if (rc < 0)
   {
