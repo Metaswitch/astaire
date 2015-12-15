@@ -90,7 +90,7 @@ void usage(void)
        " --local-name <hostname>    Specify the name of the local memcached server\n"
        " --cluster-settings-file=<filename>\n"
        "                            The filename of the cluster settings file\n"
-       " --bind-addr=<IP>           The IP address to bid to (default: all)\n"
+       " --bind-addr=<IP>           The IP address to bind to (default: all)\n"
        " --log-file=<directory>     Log to file in specified directory\n"
        " --log-level=N              Set log level to N (default: 4)\n"
        " --pidfile=<filename>       Write pidfile\n"
