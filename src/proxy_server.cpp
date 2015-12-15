@@ -112,7 +112,7 @@ bool ProxyServer::start(const char* bind_addr)
 
   rc = bind(_listen_sock,
             (struct sockaddr*)&sa,
-            (address_family == AF_INET) ? sizeof(sockaddr_in6): sizeof(sockaddr_in));
+            (address_family == AF_INET) ? sizeof(sockaddr_in): sizeof(sockaddr_in6));
 
   if (rc < 0)
   {
