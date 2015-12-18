@@ -333,20 +333,12 @@ void MemcachedBackend::cleanup_connection(void* p)
 
 Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
                                                   std::string& data,
-                                                  uint64_t& cas,
-                                                  SAS::TrailId trail)
+                                                  uint64_t& cas)
 {
   Memcached::ResultCode status = Memcached::ResultCode::NO_ERROR;
 
   int vbucket = vbucket_for_key(key);
   const std::vector<memcached_st*>& replicas = get_replicas(vbucket, Op::READ);
-
-  if (trail != 0)
-  {
-    SAS::Event start(trail, SASEvent::MEMCACHED_GET_START, 0);
-    start.add_var_param(key);
-    SAS::report_event(start);
-  }
 
   TRC_DEBUG("%d read replicas for key %s", replicas.size(), key.c_str());
 
@@ -414,15 +406,6 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
 
   if (memcached_success(rc))
   {
-    if (trail != 0)
-    {
-      SAS::Event got_data(trail, SASEvent::MEMCACHED_GET_SUCCESS, 0);
-      got_data.add_var_param(key);
-      got_data.add_var_param(data);
-      got_data.add_static_param(cas);
-      SAS::report_event(got_data);
-    }
-
     // Return the data and CAS value.  The CAS value is either set to the CAS
     // value from the result, or zero if an earlier active replica returned
     // NOT_FOUND.  This ensures that a subsequent set operation will succeed
@@ -447,13 +430,6 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
   else if (failed_replicas < replicas.size())
   {
     // At least one replica returned NOT_FOUND.
-    if (trail != 0)
-    {
-      SAS::Event not_found(trail, SASEvent::MEMCACHED_GET_NOT_FOUND, 0);
-      not_found.add_var_param(key);
-      SAS::report_event(not_found);
-    }
-
     TRC_DEBUG("At least one replica returned not found, so return NOT_FOUND");
     status = Memcached::ResultCode::KEY_NOT_FOUND;
 
@@ -468,13 +444,6 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
   {
     // All replicas returned an error, so log the error and return the
     // failure.
-    if (trail != 0)
-    {
-      SAS::Event err(trail, SASEvent::MEMCACHED_GET_ERROR, 0);
-      err.add_var_param(key);
-      SAS::report_event(err);
-    }
-
     TRC_ERROR("Failed to read data for %s from %d replicas",
               key.c_str(), replicas.size());
 
@@ -496,8 +465,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
                                                    const std::string& key,
                                                    const std::string& data,
                                                    uint64_t cas,
-                                                   int expiry,
-                                                   SAS::TrailId trail)
+                                                   int expiry)
 {
   if ((operation != Memcached::OpCode::ADD) &&
       (operation != Memcached::OpCode::SET) &&
@@ -514,16 +482,6 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
 
   int vbucket = vbucket_for_key(key);
   const std::vector<memcached_st*>& replicas = get_replicas(vbucket, Op::WRITE);
-
-  if (trail != 0)
-  {
-    SAS::Event start(trail, SASEvent::MEMCACHED_SET_START, 0);
-    start.add_var_param(key);
-    start.add_var_param(data);
-    start.add_static_param(cas);
-    start.add_static_param(expiry);
-    SAS::report_event(start);
-  }
 
   TRC_DEBUG("%d write replicas for key %s", replicas.size(), key.c_str());
 
@@ -637,13 +595,6 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
              (rc == MEMCACHED_NOTSTORED) ||
              (rc == MEMCACHED_DATA_EXISTS))
     {
-      if (trail != 0)
-      {
-        SAS::Event err(trail, SASEvent::MEMCACHED_SET_CONTENTION, 0);
-        err.add_var_param(key);
-        SAS::report_event(err);
-      }
-
       // A NOT_FOUND, NOT_STORED or EXISTS response indicates a concurrent write
       // failure, so return this to the application immediately - don't go on to
       // other replicas.
@@ -678,13 +629,6 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
       (rc != MEMCACHED_NOTSTORED) &&
       (rc != MEMCACHED_DATA_EXISTS))
   {
-    if (trail != 0)
-    {
-      SAS::Event err(trail, SASEvent::MEMCACHED_SET_FAILED, 0);
-      err.add_var_param(key);
-      SAS::report_event(err);
-    }
-
     update_vbucket_comm_state(vbucket, FAILED);
 
     if (_comm_monitor)
@@ -711,8 +655,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
 }
 
 
-Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key,
-                                                    SAS::TrailId trail)
+Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key)
 {
   TRC_DEBUG("Deleting key %s", key.c_str());
 
@@ -723,13 +666,6 @@ Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key,
   const std::vector<memcached_st*>& replicas = get_replicas(key, Op::READ);
   TRC_DEBUG("Deleting from the %d read replicas for key %s",
             replicas.size(), key.c_str());
-
-  if (trail != 0)
-  {
-    SAS::Event event(trail, SASEvent::MEMCACHED_DELETE, 0);
-    event.add_var_param(key);
-    SAS::report_event(event);
-  }
 
   const char* key_ptr = key.data();
   const size_t key_len = key.length();
@@ -747,15 +683,6 @@ Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key,
     if (!memcached_success(rc))
     {
       TRC_ERROR("Delete failed to replica %d", ii);
-
-      if (trail != 0)
-      {
-        SAS::Event event(trail, SASEvent::MEMCACHED_DELETE_FAILURE, 0);
-        event.add_var_param(key);
-        event.add_static_param(ii);
-        event.add_static_param(replicas.size());
-        SAS::report_event(event);
-      }
 
       if (best_status != Memcached::ResultCode::NO_ERROR)
       {

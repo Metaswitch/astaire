@@ -77,20 +77,17 @@ public:
   /// Gets the data for the specified key.
   Memcached::ResultCode read_data(const std::string& key,
                                   std::string& data,
-                                  uint64_t& cas,
-                                  SAS::TrailId trail = 0);
+                                  uint64_t& cas);
 
   /// Sets the data for the specified key.
   Memcached::ResultCode write_data(Memcached::OpCode operation,
                                    const std::string& key,
                                    const std::string& data,
                                    uint64_t cas,
-                                   int expiry,
-                                   SAS::TrailId trail = 0);
+                                   int expiry);
 
   /// Deletes the data for the specified key.
-  Memcached::ResultCode delete_data(const std::string& key,
-                                    SAS::TrailId trail = 0);
+  Memcached::ResultCode delete_data(const std::string& key);
 
   /// Updates the cluster settings
   void update_config();

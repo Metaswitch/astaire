@@ -81,7 +81,7 @@ bool ProxyServer::start(const char* bind_addr)
     address_family = sa_in6->sin6_family = AF_INET6;
     sa_in6->sin6_port = htons(port);
   }
-  
+
   if (rc != 1)
   {
     TRC_ERROR("Could not parse address '%s'", bind_addr);
@@ -327,7 +327,7 @@ void ProxyServer::handle_get(Memcached::GetReq* get_req,
   std::string key;
   uint64_t cas;
 
-  status = _backend->read_data(get_req->key(), value, cas, 0);
+  status = _backend->read_data(get_req->key(), value, cas);
 
   if (get_req->response_needs_key())
   {
@@ -354,8 +354,7 @@ void ProxyServer::handle_set_add_replace(Memcached::SetAddReplaceReq* sar_req,
                                 sar_req->key(),
                                 sar_req->value(),
                                 sar_req->cas(),
-                                sar_req->expiry(),
-                                0);
+                                sar_req->expiry());
 
   Memcached::SetAddReplaceRsp* sar_rsp =
     new Memcached::SetAddReplaceRsp((uint8_t)sar_req->op_code(),
@@ -370,7 +369,7 @@ void ProxyServer::handle_delete(Memcached::DeleteReq* delete_req,
 {
   Memcached::ResultCode status;
 
-  status = _backend->delete_data(delete_req->key(), 0);
+  status = _backend->delete_data(delete_req->key());
 
   Memcached::DeleteRsp* delete_rsp =
     new Memcached::DeleteRsp((uint16_t)status, delete_req->opaque());
