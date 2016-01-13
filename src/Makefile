@@ -32,7 +32,7 @@ astaire_LDFLAGS := -L../usr/lib \
 include ../build-infra/cpp.mk
 
 # Alarm definition generation rules
-ROOT := $(abspath $(shell pwd)/../)
+ROOT := ..
 MODULE_DIR := ${ROOT}/modules
 include ../modules/cpp-common/makefiles/alarm-utils.mk
 
