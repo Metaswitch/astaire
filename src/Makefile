@@ -14,7 +14,9 @@ astaire_SOURCES := memcached_tap_client.cpp \
                    logger.cpp \
                    log.cpp \
                    alarm.cpp \
-                   main.cpp
+                   main.cpp \
+                   proxy_server.cpp \
+                   memcached_backend.cpp
 
 astaire_CPPFLAGS := -I../include \
                     -I../usr/include \
