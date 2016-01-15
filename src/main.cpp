@@ -42,6 +42,7 @@
 #include "utils.h"
 #include "astaire_alarmdefinition.h"
 #include "proxy_server.hpp"
+#include "communicationmonitor.h"
 
 #include <sstream>
 #include <getopt.h>
@@ -213,6 +214,8 @@ int main(int argc, char** argv)
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
 
+  CommunicationMonitor* memcached_comm_monitor = NULL;
+
   struct options options;
   options.log_to_file = false;
   options.log_level = 0;
@@ -309,7 +312,20 @@ int main(int argc, char** argv)
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
-  MemcachedBackend* backend = new MemcachedBackend(view_cfg);
+  // Create communication monitor for memcached
+  memcached_comm_monitor = new CommunicationMonitor(new Alarm("astaire",
+                                                              AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
+                                                              AlarmDef::CRITICAL),
+                                                    "Astaire",
+                                                    "Memcached");
+  // Create vbucket alarm
+  Alarm* vbucket_alarm = new Alarm("astaire",
+                                   AlarmDef::ASTAIRE_VBUCKET_ERROR,
+                                   AlarmDef::MAJOR);
+
+  MemcachedBackend* backend = new MemcachedBackend(view_cfg,
+                                                   memcached_comm_monitor,
+                                                   vbucket_alarm);
 
   // Start the memcached proxy server.
   ProxyServer* proxy_server = new ProxyServer(backend);
@@ -335,6 +351,7 @@ int main(int argc, char** argv)
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
   delete proxy_server; proxy_server = NULL;
+  delete vbucket_alarm; vbucket_alarm = NULL;
   delete backend; backend = NULL;
   delete per_conn_stats;
   delete global_stats;
