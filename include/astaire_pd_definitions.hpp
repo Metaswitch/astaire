@@ -83,11 +83,11 @@ const static PDLog CL_ASTAIRE_ENDED
     "(2). If Astaire fails to respond to monit queries in a timely manner, monit restarts the application."
 );
 
-const static PDLog1<const char*> CL_ASTAIRE_CRASHED
+const static PDLog1<const char*> CL_ASTAIRE_TERMINATED
 (
   PDLogBase::CL_ASTAIRE_ID + 4,
   PDLOG_ERR,
-  "Fatal - Astaire has exited or crashed with signal %s.",
+  "Fatal - Astaire has exited or been terminated with signal %s.",
   "Astaire has encountered a fatal software error or has been terminated",
   "The application will exit and restart until the problem is fixed.",
   "Ensure that Astaire has been installed correctly and that it "

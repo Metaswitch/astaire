@@ -198,7 +198,7 @@ void signal_handler(int sig)
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
 
-  CL_ASTAIRE_CRASHED.log(strsignal(sig));
+  CL_ASTAIRE_TERMINATED.log(strsignal(sig));
   closelog();
 
   // Dump a core.
