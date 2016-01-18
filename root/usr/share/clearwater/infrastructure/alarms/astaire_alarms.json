@@ -24,7 +24,7 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "The local Memcached resynchronization process has ended, and is no longer blocking a scale-up or scale-down operation (a different type of resynchronization operation may still be in progress though). Unless an error log has been raised, the local Memcached process is synchronized with the rest of the cluster.",
+                    "details": "The local Memcached resynchronization process has ended, no longer blocking a scale-up or down operation (a different type of resynchronization operation may still be in progress though). An error log will indicate if the process was unsuccessful.",
                     "description": "Astaire: Memcached resynchronization complete"
                 },
                 {
@@ -46,7 +46,7 @@
                 },
                 {
                     "severity": "CRITICAL",
-                    "details": "Astaire has failed to make a connection with all Memcached processes in the cluster  . If this alarm does not clear, network connection may have been lost, or the Memcached processes may have failed and be in an unrecoverable condition.",
+                    "details": "Astaire has failed to make a connection with all Memcached processes in the cluster. If this alarm does not clear, network connection may have been lost, or the Memcached processes may have failed and be in an unrecoverable condition.",
                     "description": "Astaire: Memcached communication error"
                 }
             ]

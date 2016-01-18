@@ -214,8 +214,6 @@ int main(int argc, char** argv)
   sem_init(&term_sem, 0, 0);
   signal(SIGTERM, terminate_handler);
 
-  CommunicationMonitor* memcached_comm_monitor = NULL;
-
   struct options options;
   options.log_to_file = false;
   options.log_level = 0;
@@ -313,11 +311,11 @@ int main(int argc, char** argv)
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
   // Create communication monitor for memcached
-  memcached_comm_monitor = new CommunicationMonitor(new Alarm("astaire",
-                                                              AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
-                                                              AlarmDef::CRITICAL),
-                                                    "Astaire",
-                                                    "Memcached");
+  CommunicationMonitor* memcached_comm_monitor = new CommunicationMonitor(new Alarm("astaire",
+                                                                                    AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
+                                                                                    AlarmDef::CRITICAL),
+                                                                          "Astaire",
+                                                                          "Memcached");
   // Create vbucket alarm
   Alarm* vbucket_alarm = new Alarm("astaire",
                                    AlarmDef::ASTAIRE_VBUCKET_ERROR,
@@ -351,6 +349,7 @@ int main(int argc, char** argv)
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
   delete proxy_server; proxy_server = NULL;
+  delete memcached_comm_monitor; memcached_comm_monitor = NULL;
   delete vbucket_alarm; vbucket_alarm = NULL;
   delete backend; backend = NULL;
   delete per_conn_stats;
