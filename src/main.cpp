@@ -42,6 +42,7 @@
 #include "utils.h"
 #include "astaire_alarmdefinition.h"
 #include "proxy_server.hpp"
+#include "communicationmonitor.h"
 
 #include <sstream>
 #include <getopt.h>
@@ -197,7 +198,7 @@ void signal_handler(int sig)
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
 
-  CL_ASTAIRE_CRASHED.log(strsignal(sig));
+  CL_ASTAIRE_TERMINATED.log(strsignal(sig));
   closelog();
 
   // Dump a core.
@@ -309,7 +310,20 @@ int main(int argc, char** argv)
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
-  MemcachedBackend* backend = new MemcachedBackend(view_cfg);
+  // Create communication monitor for memcached
+  CommunicationMonitor* memcached_comm_monitor = new CommunicationMonitor(new Alarm("astaire",
+                                                                                    AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
+                                                                                    AlarmDef::CRITICAL),
+                                                                          "Astaire",
+                                                                          "Memcached");
+  // Create vbucket alarm
+  Alarm* vbucket_alarm = new Alarm("astaire",
+                                   AlarmDef::ASTAIRE_VBUCKET_ERROR,
+                                   AlarmDef::MAJOR);
+
+  MemcachedBackend* backend = new MemcachedBackend(view_cfg,
+                                                   memcached_comm_monitor,
+                                                   vbucket_alarm);
 
   // Start the memcached proxy server.
   ProxyServer* proxy_server = new ProxyServer(backend);
@@ -335,6 +349,8 @@ int main(int argc, char** argv)
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
   delete proxy_server; proxy_server = NULL;
+  delete memcached_comm_monitor; memcached_comm_monitor = NULL;
+  delete vbucket_alarm; vbucket_alarm = NULL;
   delete backend; backend = NULL;
   delete per_conn_stats;
   delete global_stats;
