@@ -49,10 +49,13 @@ check process astaire_process pidfile /var/run/astaire/astaire.pid
   if memory is greater than 80% for 3 cycles
      then exec "/bin/bash -c '/usr/share/clearwater/bin/issue_alarm.py monit 5500.3; /etc/init.d/astaire abort-restart'"
 
-  if uptime < 30 seconds
-     then exec "/bin/true"
-     else if succeeded
-         then exec "/usr/share/clearwater/bin/issue_alarm.py monit 5500.1"
+# Clear any alarms if the process has been running long enough.
+check program astaire_uptime with path "/usr/share/clearwater/bin/check-uptime /var/run/astaire/astaire.pid"
+  group astaire
+  depends on astaire_process
+  every 3 cycles
+  if status = 0 then exec "/usr/share/clearwater/bin/issue_alarm.py monit 5500.1"
+
 EOF
 chmod 0644 /etc/monit/conf.d/astaire.monit
 
