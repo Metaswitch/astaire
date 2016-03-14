@@ -313,24 +313,44 @@ void MemcachedBackend::update_vbucket_comm_state(int vbucket, CommState state)
     {
       if (state == OK)
       {
-        if ((_vbucket_comm_fail_count--) == 0)
+        if (_vbucket_comm_fail_count > 0)
         {
-          _vbucket_alarm->clear();
+          _vbucket_comm_fail_count--;
         }
       }
       else
       {
         _vbucket_comm_fail_count++;
-        _vbucket_alarm->set();
       }
 
       _vbucket_comm_state[vbucket] = state;
     }
 
+    if (current_time_ms() > _next_vbucket_alarm_update)
+    {
+      if (_vbucket_comm_fail_count == 0)
+      {
+        _vbucket_alarm->clear();
+      }
+      else
+      {
+        _vbucket_alarm->set();
+      }
+
+      _next_vbucket_alarm_update = current_time_ms() + _update_period_ms;
+    }
     pthread_mutex_unlock(&_vbucket_comm_lock);
   }
 }
 
+unsigned long MemcachedBackend::current_time_ms()
+{
+  struct timespec ts;
+
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+
+  return ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
+}
 
 /// Called to clean up the thread local data for a thread using the
 /// MemcachedBackend class.
