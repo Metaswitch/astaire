@@ -195,6 +195,8 @@ void Astaire::control_thread()
     }
     else
     {
+      // Explicitly clear the resync alarm, in case it is still in unknown state.
+      _alarm->clear();
       // Wait 10s for the next resync trigger. If we don't get one in that time
       // we wake up and poll memcached again.
       TRC_DEBUG("Wait for resync trigger");
