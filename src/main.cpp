@@ -277,7 +277,6 @@ int main(int argc, char** argv)
                                           AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
                                           AlarmDef::MINOR);
   AlarmReqAgent::get_instance().start();
-  AlarmState::clear_all("astaire");
 
   // These values match those in MemcachedStore's constructor
   MemcachedStoreView* view = new MemcachedStoreView(128, 2);
