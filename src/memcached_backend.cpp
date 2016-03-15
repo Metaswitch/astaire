@@ -303,6 +303,9 @@ const std::vector<memcached_st*>& MemcachedBackend::get_replicas(int vbucket,
 /// Update state of vbucket replica communication. If alarms are configured, a set
 /// alarm is issued if a vbucket becomes inaccessible, a clear alarm is issued once
 /// all vbuckets become accessible again.
+/// While _vbucket_comm_fail_count will essentially always be equal to the number of
+/// non-OK elements in _vbucket_comm_state, the comparison to 0 is much easier using
+/// an int rather than iterating over a map, so we maintain both.
 void MemcachedBackend::update_vbucket_comm_state(int vbucket, CommState state)
 {
   if (_vbucket_alarm)
