@@ -123,6 +123,12 @@ private:
   typedef enum {OK, FAILED} CommState;
   void update_vbucket_comm_state(int vbucket, CommState state);
 
+  // Stores time for the next vbucket alarm update. Start at 0 to ensure first update is sent
+  unsigned long _next_vbucket_alarm_update = 0;
+  unsigned long current_time_ms();
+  // Only send alarm updates if 30 seconds have passed since last update
+  unsigned int _update_period_ms = 30 * 1000;
+
   // Called by the thread-local-storage clean-up functions when a thread ends.
   static void cleanup_connection(void* p);
 
