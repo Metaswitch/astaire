@@ -157,7 +157,6 @@ int init_options(int argc, char**argv, struct options& options)
     case HELP:
       usage();
       CL_ASTAIRE_ENDED.log();
-      closelog();
       exit(0);
 
     case LOG_LEVEL:
@@ -199,7 +198,6 @@ void signal_handler(int sig)
   TRC_COMMIT();
 
   CL_ASTAIRE_TERMINATED.log(strsignal(sig));
-  closelog();
 
   // Dump a core.
   abort();
@@ -223,20 +221,18 @@ int main(int argc, char** argv)
   options.bind_addr = "";
   options.pidfile = "";
 
-  boost::filesystem::path p = argv[0];
-  // Copy the filename to a string so that we can be sure of its lifespan -
-  // the value passed to openlog must be valid for the duration of the program.
-  std::string filename = p.filename().c_str();
-  openlog(filename.c_str(), PDLOG_PID, PDLOG_LOCAL6);
+  // Initialise ENT logging before making "Started" log
+  PDLogStatic::init(argv[0]);
+
   CL_ASTAIRE_STARTED.log();
 
   if (init_logging_options(argc, argv, options) != 0)
   {
-    closelog();
     return 1;
   }
 
   Log::setLoggingLevel(options.log_level);
+  boost::filesystem::path p = argv[0];
   if (options.log_to_file && (options.log_directory != ""))
   {
     Log::setLogger(new Logger(options.log_directory, p.filename().string()));
@@ -255,7 +251,6 @@ int main(int argc, char** argv)
 
   if (init_options(argc, argv, options) != 0)
   {
-    closelog();
     return 1;
   }
 
@@ -288,7 +283,6 @@ int main(int argc, char** argv)
                                           AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
                                           AlarmDef::MINOR);
   AlarmReqAgent::get_instance().start();
-  AlarmState::clear_all("astaire");
 
   // These values match those in MemcachedStore's constructor
   MemcachedStoreView* view = new MemcachedStoreView(128, 2);
@@ -359,7 +353,6 @@ int main(int argc, char** argv)
   delete view_cfg;
   delete view;
 
-  closelog();
   signal(SIGTERM, SIG_DFL);
   sem_destroy(&term_sem);
 
