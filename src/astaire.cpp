@@ -46,7 +46,7 @@ const std::string ASTAIRE_TAG_VALUE = "{}";
 
 // Utility function to search a vector.
 template<class T>
-bool is_in_vector(const std::vector<T>& vec, const T& item)
+inline bool is_in_vector(const std::vector<T>& vec, const T& item)
 {
   return (!(std::find(vec.begin(), vec.end(), item) == vec.end()));
 }

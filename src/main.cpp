@@ -54,6 +54,7 @@ struct options
   std::string log_directory;
   int log_level;
   std::string pidfile;
+  bool daemon;
 };
 
 enum Options
@@ -63,6 +64,7 @@ enum Options
   LOG_FILE,
   LOG_LEVEL,
   PIDFILE,
+  DAEMON,
   HELP,
 };
 
@@ -73,6 +75,7 @@ const static struct option long_opt[] =
   {"log-file",               required_argument, NULL, LOG_FILE},
   {"log-level",              required_argument, NULL, LOG_LEVEL},
   {"pidfile",                required_argument, NULL, PIDFILE},
+  {"daemon",                 no_argument,       NULL, DAEMON},
   {"help",                   no_argument,       NULL, HELP},
   {NULL,                     0,                 NULL, 0},
 };
@@ -89,6 +92,7 @@ void usage(void)
        " --log-file=<directory>     Log to file in specified directory\n"
        " --log-level=N              Set log level to N (default: 4)\n"
        " --pidfile=<filename>       Write pidfile\n"
+       " --daemon                   Run as daemon\n"
        " --help                     Show this help screen\n"
        );
 }
@@ -142,6 +146,10 @@ int init_options(int argc, char**argv, struct options& options)
 
     case PIDFILE:
       options.pidfile = std::string(optarg);
+      break;
+
+    case DAEMON:
+      options.daemon = true;
       break;
 
     case HELP:
@@ -209,6 +217,7 @@ int main(int argc, char** argv)
   options.local_memcached_server = "";
   options.cluster_settings_file = "";
   options.pidfile = "";
+  options.daemon = false;
 
   // Initialise ENT logging before making "Started" log
   PDLogStatic::init(argv[0]);
@@ -256,6 +265,16 @@ int main(int argc, char** argv)
   }
 
   TRC_STATUS("Astaire starting up");
+
+  if (options.daemon)
+  {
+    int errnum = Utils::daemonize();
+    if (errnum != 0)
+    {
+      TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
+      exit(0);
+    }
+  }
 
   if (options.pidfile != "")
   {
