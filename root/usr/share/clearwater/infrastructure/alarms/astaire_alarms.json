@@ -30,19 +30,19 @@
             "levels": [
                 {
                     "severity": "CLEARED",
-                    "details": "The local Memcached resynchronization process has ended, no longer blocking a scale-up or down operation (a different type of resynchronization operation may still be in progress though). An error log will indicate if the process was unsuccessful.",
-                    "description": "Astaire: Memcached resynchronization complete.",
-                    "cause": "The local Memcached process is synchronized with the rest of the cluster. Memcached resynchronization is no longer blocking a scale-up or scale-down operation (a different type of resynchronization operation may still be in progress though.",
+                    "details": "The local Memcached process is synchronized with the rest of the cluster. Memcached resynchronization is no longer blocking a scale-in or scale-out operation (a different type of resynchronization operation may still be in progress though).",
+                    "description": "Astaire: Memcached database synchronized",
+                    "cause": "The local Memcached process is synchronized with the rest of the cluster. Memcached resynchronization is no longer blocking a scale-in or scale-out operation (a different type of resynchronization operation may still be in progress though).",
                     "effect": "The local node has received all of the synchronized data.",
                     "action": "No action."
                 },
                 {
                     "severity": "MINOR",
-                    "details": "Astaire is resynchronizing the local Memcached process with the rest of the cluster. Service should be unaffected. If a scale-up or scale-down operation is in progress, wait for resynchronization to finish before completing the operation.",
-                    "description": "Astaire: Memcached database resynchronization in progress.",
+                    "details": "Astaire is resynchronizing the local Memcached process with the rest of the cluster. Service should be unaffected. If a scale-in or scale-out operation is in progress, wait for resynchronization to finish before completing the operation.",
+                    "description": "Astaire: Memcached database resynchronization in progress",
                     "cause": "Astaire is resynchronizing the local Memcached process with the rest of the cluster.",
                     "effect": "Service is unaffected.",
-                    "action": "If a scale-up or scale-down operation is in progress, wait for resynchronization to finish before completing the operation."
+                    "action": "If a scale-in or scale-out operation is in progress, wait for resynchronization to finish before completing the operation."
                 }
             ]
         },
