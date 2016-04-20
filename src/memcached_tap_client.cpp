@@ -108,6 +108,25 @@ bool Memcached::from_wire(std::string& msg,
     case (uint8_t)OpCode::TAP_MUTATE:
       output = from_wire_int<Memcached::TapMutateReq>(msg);
       break;
+    case (uint8_t)OpCode::GET:
+    case (uint8_t)OpCode::GETK:
+      output = from_wire_int<Memcached::GetReq>(msg);
+      break;
+    case (uint8_t)OpCode::SET:
+      output = from_wire_int<Memcached::SetReq>(msg);
+      break;
+    case (uint8_t)OpCode::ADD:
+      output = from_wire_int<Memcached::AddReq>(msg);
+      break;
+    case (uint8_t)OpCode::REPLACE:
+      output = from_wire_int<Memcached::ReplaceReq>(msg);
+      break;
+    case (uint8_t)OpCode::DELETE:
+      output = from_wire_int<Memcached::DeleteReq>(msg);
+      break;
+    case (uint8_t)OpCode::VERSION:
+      output = from_wire_int<Memcached::VersionReq>(msg);
+      break;
     default:
       output = from_wire_int<Memcached::BaseReq>(msg);
       break;
@@ -151,7 +170,10 @@ std::string Memcached::BaseMessage::to_wire() const
   // Values sections.
   uint32_t body_size = extra.length() + _key.length() + value.length();
 
-  Utils::write((uint8_t)0x80, ss); // Magic byte (0x80 - REQUEST)
+  // In the memcache protocol the first byte (aka the "magic" byte) is 0x80 for
+  // a request and 0x81 for a response.
+  uint8_t magic_byte = is_request() ? 0x80 : 0x81;
+  Utils::write(magic_byte, ss);
   Utils::write((uint8_t)_op_code, ss);
   Utils::write((uint16_t)_key.length(), ss);
   Utils::write((uint8_t)extra.length(), ss);
@@ -187,6 +209,11 @@ Memcached::BaseRsp::BaseRsp(const std::string& msg) : BaseMessage(msg)
   _status = HDR_GET(msg.data(), vbucket_or_status);
 }
 
+bool Memcached::GetReq::response_needs_key() const
+{
+  return (_op_code == (uint8_t)OpCode::GETK);
+}
+
 Memcached::GetRsp::GetRsp(const std::string& msg) : BaseRsp(msg)
 {
   const char* raw = msg.data();
@@ -199,6 +226,62 @@ Memcached::GetRsp::GetRsp(const std::string& msg) : BaseRsp(msg)
   std::string extra = msg.substr(sizeof(MsgHdr), extra_length);
   _flags = Utils::network_to_host(((uint32_t*)extra.data())[0]);
   _value = msg.substr(sizeof(MsgHdr) + extra_length + key_length, body_length - (extra_length + key_length));
+}
+
+Memcached::GetRsp::GetRsp(uint16_t status,
+                          uint32_t opaque,
+                          uint64_t cas,
+                          const std::string& value,
+                          uint32_t flags,
+                          const std::string& key) :
+  BaseRsp((uint8_t)OpCode::GET, "", status, opaque, cas),
+  _value(value),
+  _flags(flags)
+{
+  if (!key.empty())
+  {
+    // We've been passed a key to put on the response. This means we need to
+    // send a GETK response rather than a GET.
+    _op_code = (uint8_t)OpCode::GETK;
+    _key = key;
+  }
+}
+
+std::string Memcached::GetRsp::generate_extra() const
+{
+  std::string extras_string;
+
+  // Only add the flags if a result has been found.
+  if (_status == (uint16_t)ResultCode::NO_ERROR)
+  {
+    Utils::write(_flags, extras_string);
+  }
+
+  return extras_string;
+}
+
+std::string Memcached::GetRsp::generate_value() const
+{
+  return _value;
+}
+
+Memcached::SetAddReplaceReq::SetAddReplaceReq(const std::string& msg) :
+  BaseReq(msg),
+  _value(),
+  _flags(0),
+  _expiry(0)
+{
+  const char* raw = msg.data();
+  uint16_t key_length = HDR_GET(raw, key_length);
+  uint8_t extra_length = HDR_GET(raw, extra_length);
+  uint32_t body_length = HDR_GET(raw, body_length);
+  raw = NULL; // It's now safe to call non-const functions on `msg`
+
+  std::string extra = msg.substr(sizeof(MsgHdr), extra_length);
+  _flags = Utils::network_to_host(((uint32_t*)extra.data())[0]);
+  _expiry = Utils::network_to_host(((uint32_t*)extra.data())[1]);
+  _value = msg.substr(sizeof(MsgHdr) + (extra_length + key_length),
+                      body_length - (extra_length + key_length));
 }
 
 Memcached::SetAddReplaceReq::SetAddReplaceReq(uint8_t command,
@@ -231,6 +314,19 @@ std::string Memcached::SetAddReplaceReq::generate_extra() const
 std::string Memcached::SetAddReplaceReq::generate_value() const
 {
   return _value;
+}
+
+Memcached::VersionRsp::VersionRsp(uint16_t status,
+                                  uint32_t opaque,
+                                  const std::string& version) :
+  BaseRsp((uint8_t)OpCode::VERSION, "", status, opaque, 0),
+  _version(version)
+{
+}
+
+std::string Memcached::VersionRsp::generate_value() const
+{
+  return _version;
 }
 
 Memcached::TapConnectReq::TapConnectReq(const VBucketList& buckets) :
@@ -308,8 +404,7 @@ std::string Memcached::SetVBucketReq::generate_extra() const
   return ss;
 }
 
-Memcached::Connection::Connection(const std::string& address) :
-  _address(address),
+Memcached::Connection::Connection() :
   _sock(-1)
 {
 }
@@ -317,53 +412,6 @@ Memcached::Connection::Connection(const std::string& address) :
 Memcached::Connection::~Connection()
 {
   disconnect();
-}
-
-int Memcached::Connection::connect()
-{
-  struct addrinfo ai_hint;
-  memset(&ai_hint, 0x00, sizeof(ai_hint));
-  ai_hint.ai_family = AF_UNSPEC;
-  ai_hint.ai_socktype = SOCK_STREAM;
-
-  std::string host;
-  int port;
-  if (!::Utils::split_host_port(_address, host, port))
-  {
-    return -1;
-  }
-
-  struct addrinfo* ai;
-  int rc = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &ai_hint, &ai);
-  if (rc < 0)
-  {
-    TRC_ERROR("Failed to resolve hostname %s (%s)",
-              _address.c_str(),
-              gai_strerror(rc));
-    return rc;
-  }
-
-  _sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-  if (_sock < 0)
-  {
-    int err = errno;
-    TRC_ERROR("Failed to create socket (%d)", err);
-    return err;
-  }
-
-  if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
-  {
-    int err = errno;
-    TRC_ERROR("Failed to connect to %s (%d)",
-              _address.c_str(),
-              err);
-    ::close(_sock); _sock = -1;
-    return err;
-  }
-
-  ::freeaddrinfo(ai); ai = NULL;
-
-  return 0;
 }
 
 void Memcached::Connection::disconnect()
@@ -432,3 +480,64 @@ Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
 
   return Memcached::Status::OK;
 }
+
+Memcached::ClientConnection::ClientConnection(const std::string& address) :
+  Connection()
+{
+  _address = address;
+}
+
+int Memcached::ClientConnection::connect()
+{
+  struct addrinfo ai_hint;
+  memset(&ai_hint, 0x00, sizeof(ai_hint));
+  ai_hint.ai_family = AF_UNSPEC;
+  ai_hint.ai_socktype = SOCK_STREAM;
+
+  std::string host;
+  int port;
+  if (!::Utils::split_host_port(_address, host, port))
+  {
+    return -1;
+  }
+
+  struct addrinfo* ai;
+  int rc = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &ai_hint, &ai);
+  if (rc < 0)
+  {
+    TRC_ERROR("Failed to resolve hostname %s (%s)",
+              _address.c_str(),
+              gai_strerror(rc));
+    return rc;
+  }
+
+  _sock = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+  if (_sock < 0)
+  {
+    int err = errno;
+    TRC_ERROR("Failed to create socket (%d)", err);
+    return err;
+  }
+
+  if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
+  {
+    int err = errno;
+    TRC_ERROR("Failed to connect to %s (%d)",
+              _address.c_str(),
+              err);
+    ::close(_sock); _sock = -1;
+    return err;
+  }
+
+  ::freeaddrinfo(ai); ai = NULL;
+
+  return 0;
+}
+
+Memcached::ServerConnection::ServerConnection(int sock, const std::string& address) :
+  Connection()
+{
+  _sock = sock;
+  _address = address;
+}
+

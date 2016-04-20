@@ -16,7 +16,7 @@ DEB_NAMES := astaire astaire-dbg astaire-libs astaire-libs-dbg
 INCLUDE_DIR := ${INSTALL_DIR}/include
 LIB_DIR := ${INSTALL_DIR}/lib
 
-SUBMODULES := libmemcached cpp-common
+SUBMODULES := libmemcached cpp-common sas-client
 
 include $(patsubst %, ${MK_DIR}/%.mk, ${SUBMODULES})
 include ${MK_DIR}/astaire.mk

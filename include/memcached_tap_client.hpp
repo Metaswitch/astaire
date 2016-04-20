@@ -90,6 +90,8 @@ namespace Memcached
     ADD = 0x02,
     REPLACE = 0x03,
     DELETE = 0x04,
+    VERSION = 0x0b,
+    GETK = 0x0c,
     TAP_CONNECT = 0x40,
     TAP_MUTATE = 0x41,
     SET_VBUCKET = 0x3d
@@ -97,15 +99,22 @@ namespace Memcached
 
   enum struct ResultCode
   {
-    NO_ERROR = 0x0000,
-    KEY_NOT_FOUND = 0x0001,
-    KEY_EXISTS = 0x0002,
-    VALUE_TOO_LARGE = 0x0003,
+    NO_ERROR = 0X0000,
+    KEY_NOT_FOUND = 0X0001,
+    KEY_EXISTS = 0X0002,
+    VALUE_TOO_LARGE = 0X0003,
     INVALID_ARGUMENTS = 0X0004,
     ITEM_NOT_STORED = 0X0005,
     INCR_DECR_ON_NON_NUMERIC_VALUE = 0X0006,
+    THE_VBUCKET_BELONGS_TO_ANOTHER_SERVER = 0X0007,
+    AUTHENTICATION_ERROR = 0X0008,
+    AUTHENTICATION_CONTINUE = 0X0009,
     UNKNOWN_COMMAND = 0X0081,
-    OUT_OF_MEMORY = 0X0082
+    OUT_OF_MEMORY = 0X0082,
+    NOT_SUPPORTED = 0X0083,
+    INTERNAL_ERROR = 0X0084,
+    BUSY = 0X0085,
+    TEMPORARY_FAILURE = 0X0086
   };
 
   enum struct VBucketStatus
@@ -168,7 +177,6 @@ namespace Memcached
     virtual std::string generate_value() const { return ""; };
     virtual uint16_t generate_vbucket_or_status() const = 0;
 
-  private:
     uint8_t _op_code;
     std::string _key;
     uint32_t _opaque;
@@ -226,18 +234,36 @@ namespace Memcached
   class GetReq : public BaseReq
   {
   public:
-    GetReq(std::string key) : BaseReq((uint8_t)OpCode::GET, key, 0, 0, 0) {}
+    GetReq(const std::string& msg) : BaseReq(msg) {}
+
+    // This constructor explicitly takes an opaque parameter to distinguish it
+    // from the previous constructor (which initializes a GET request from a
+    // message buffer).
+    GetReq(std::string key, uint32_t opaque) :
+      BaseReq((uint8_t)OpCode::GET, key, 0, opaque, 0)
+    {}
+
+    bool response_needs_key() const;
   };
 
   class GetRsp : public BaseRsp
   {
   public:
     GetRsp(const std::string& msg);
+    GetRsp(uint16_t status,
+           uint32_t opaque,
+           uint64_t cas,
+           const std::string& value,
+           uint32_t flags,
+           const std::string& key = "");
 
     std::string value() const { return _value; };
     uint32_t flags() const { return _flags; };
 
   private:
+    virtual std::string generate_extra() const;
+    virtual std::string generate_value() const;
+
     std::string _value;
     uint32_t _flags;
   };
@@ -245,18 +271,29 @@ namespace Memcached
   class DeleteReq : public BaseReq
   {
   public:
-    DeleteReq(std::string key) : BaseReq((uint8_t)OpCode::DELETE, key, 0, 0, 0) {}
+    DeleteReq(const std::string& msg) : BaseReq(msg) {}
+
+    // This constructor explicitly takes an opaque parameter to distinguish it
+    // from the previous constructor (which initializes a GET request from a
+    // message buffer).
+    DeleteReq(std::string key, uint32_t opaque) :
+      BaseReq((uint8_t)OpCode::DELETE, key, 0, opaque, 0)
+    {}
   };
 
   class DeleteRsp : public BaseRsp
   {
   public:
     DeleteRsp(const std::string& msg);
+    DeleteRsp(uint8_t status, uint32_t opaque) :
+      BaseRsp((uint8_t)OpCode::DELETE, "", status, opaque, 0)
+    {}
   };
 
   class SetAddReplaceReq : public BaseReq
   {
   public:
+    SetAddReplaceReq(const std::string& msg);
     SetAddReplaceReq(uint8_t command,
                      std::string key,
                      uint16_t vbucket,
@@ -264,6 +301,9 @@ namespace Memcached
                      uint64_t cas,
                      uint32_t flags,
                      uint32_t expiry);
+
+    uint32_t expiry() const { return _expiry; }
+    std::string value() const { return _value; }
 
   protected:
     std::string generate_extra() const;
@@ -279,11 +319,20 @@ namespace Memcached
   {
   public:
     SetAddReplaceRsp(const std::string& msg) : BaseRsp(msg) {};
+
+    SetAddReplaceRsp(uint8_t command,
+                     uint8_t status,
+                     uint32_t opaque,
+                     uint64_t cas = 0) :
+      BaseRsp(command, "", status, opaque, cas)
+    {};
   };
 
   class SetReq : public SetAddReplaceReq
   {
   public:
+    SetReq(const std::string& msg) : SetAddReplaceReq(msg) {}
+
     SetReq(std::string key,
            uint16_t vbucket,
            std::string value,
@@ -298,6 +347,8 @@ namespace Memcached
   class AddReq : public SetAddReplaceReq
   {
   public:
+    AddReq(const std::string& msg): SetAddReplaceReq(msg) {}
+
     AddReq(std::string key,
            uint16_t vbucket,
            std::string value,
@@ -312,6 +363,8 @@ namespace Memcached
   class ReplaceReq : public SetAddReplaceReq
   {
   public:
+    ReplaceReq(const std::string& msg): SetAddReplaceReq(msg) {}
+
     ReplaceReq(std::string key,
                uint16_t vbucket,
                std::string value,
@@ -335,6 +388,25 @@ namespace Memcached
 
   private:
     std::vector<uint16_t> _buckets;
+  };
+
+  class VersionReq : public BaseReq
+  {
+  public:
+    VersionReq(const std::string& msg) : BaseReq(msg) {}
+  };
+
+  class VersionRsp : public BaseRsp
+  {
+  public:
+    VersionRsp(uint16_t status,
+               uint32_t opaque,
+               const std::string& version);
+
+    std::string generate_value() const;
+
+  private:
+    std::string _version;
   };
 
   class TapMutateReq : public BaseReq
@@ -374,19 +446,33 @@ namespace Memcached
   class Connection
   {
   public:
-    Connection(const std::string& address);
-    ~Connection();
-
-    int connect();
     void disconnect();
 
     bool send(const BaseMessage& msg);
     Status recv(BaseMessage** msg);
 
-  private:
-    const std::string _address;
+    std::string address() { return _address; }
+
+  protected:
+    Connection();
+    virtual ~Connection();
+
+    std::string _address;
     int _sock;
     std::string _buffer;
+  };
+
+  class ClientConnection : public Connection
+  {
+  public:
+    ClientConnection(const std::string& address);
+    int connect();
+  };
+
+  class ServerConnection : public Connection
+  {
+  public:
+    ServerConnection(int sock, const std::string& address);
   };
 
   // Entry point for parsing messages off the wire.

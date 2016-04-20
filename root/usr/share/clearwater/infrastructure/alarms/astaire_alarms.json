@@ -16,7 +16,7 @@
                 {
                     "severity": "CRITICAL",
                     "details": "Monit has detected that the Astaire process has failed. A restart will automatically be attempted. If this alarm does not clear, the Astaire process may have been stopped or an unrecoverable failure may have occurred.",
-                    "description": "Astaire: Process failure",
+                    "description": "Astaire: Process failure.",
                     "cause": "Monit has detected that the Astaire process has failed. A restart will automatically be attempted.",
                     "effect": "Synchronization of the Memcached database will be delayed until the process recovers.",
                     "action": "If this alarm does not clear, the Astaire process may have been stopped or an unrecoverable failure may have occurred. If the alarm fails to clear then contact your support representative."
@@ -31,7 +31,7 @@
                 {
                     "severity": "CLEARED",
                     "details": "The local Memcached process is synchronized with the rest of the cluster. Memcached resynchronization is no longer blocking a scale-in or scale-out operation (a different type of resynchronization operation may still be in progress though).",
-                    "description": "Astaire: Memcached database synchronized",
+                    "description": "Astaire: Memcached database synchronized.",
                     "cause": "The local Memcached process is synchronized with the rest of the cluster. Memcached resynchronization is no longer blocking a scale-in or scale-out operation (a different type of resynchronization operation may still be in progress though).",
                     "effect": "The local node has received all of the synchronized data.",
                     "action": "No action."
@@ -39,10 +39,56 @@
                 {
                     "severity": "MINOR",
                     "details": "Astaire is resynchronizing the local Memcached process with the rest of the cluster. Service should be unaffected. If a scale-in or scale-out operation is in progress, wait for resynchronization to finish before completing the operation.",
-                    "description": "Astaire: Memcached database resynchronization in progress",
+                    "description": "Astaire: Memcached database resynchronization in progress.",
                     "cause": "Astaire is resynchronizing the local Memcached process with the rest of the cluster.",
                     "effect": "Service is unaffected.",
                     "action": "If a scale-in or scale-out operation is in progress, wait for resynchronization to finish before completing the operation."
+                }
+            ]
+        },
+        {
+            "index": 5502,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "ASTAIRE_MEMCACHED_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Astaire communication to at least one Memcached has been restored.",
+                    "description": "Astaire: Memcached communication error cleared.",
+                    "cause": "Astaire communication to at least one Memcached has been restored. The previously issued alarm has been cleared.",
+                    "effect": "Normal Astaire operation has been restored.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Astaire has failed to make a connection with all Memcached processes in the cluster. If this alarm does not clear, network connection may have been lost, or the Memcached processes may have failed and be in an unrecoverable condition.",
+                    "description": "Astaire: Memcached communication error.",
+                    "cause": "Astaire is unable to contact any Memcacheds.",
+                    "effect": "The system is unable to retrieve or write short lived data. The exact effect will depend on which processes are using this Astaire.",
+                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that the Memcached processes are operational and that network connectivity exists between Memcached and Astaire. If Memcached processes do not return to service then contact your support representative."
+                }
+            ]
+        },
+        {
+            "index": 5503,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "ASTAIRE_VBUCKET_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Astaire communication to Memcached for a piece of data has been restored.",
+                    "description": "Astaire: Memcached vBucket communication error cleared.",
+                    "cause": "Astaire communication to Memcached for a vBucket has been restored. The previously issued alarm has been cleared.",
+                    "effect": "Normal Astaire operation has been restored.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "MAJOR",
+                    "details": "Astaire is unable to contact any Memcacheds for a piece of data. Some subscriber data will be unavailable. If this alarm does not clear, ensure that all Memcacheds are operational and that network connectivity exists between them and Astaire.",
+                    "description": "Astaire: Memcached vBucket communication error.",
+                    "cause": "Astaire is unable to contact any Memcacheds for a vBucket.",
+                    "effect": "The system is unable to retrieve or write some short lived data. The exact effect will depend on which processes are using this Astaire.",
+                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that the Memcached processes are operational and that network connectivity exists between Memcached and Astaire. If Memcached processes do not return to service then contact your support representative."
                 }
             ]
         }

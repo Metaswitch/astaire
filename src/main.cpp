@@ -41,6 +41,8 @@
 #include "logger.h"
 #include "utils.h"
 #include "astaire_alarmdefinition.h"
+#include "proxy_server.hpp"
+#include "communicationmonitor.h"
 
 #include <sstream>
 #include <getopt.h>
@@ -50,6 +52,7 @@ struct options
 {
   std::string local_memcached_server;
   std::string cluster_settings_file;
+  std::string bind_addr;
   bool log_to_file;
   std::string log_directory;
   int log_level;
@@ -61,6 +64,7 @@ enum Options
 {
   LOCAL_NAME=256+1,
   CLUSTER_SETTINGS_FILE,
+  BIND_ADDR,
   LOG_FILE,
   LOG_LEVEL,
   PIDFILE,
@@ -72,6 +76,7 @@ const static struct option long_opt[] =
 {
   {"local-name",             required_argument, NULL, LOCAL_NAME},
   {"cluster-settings-file",  required_argument, NULL, CLUSTER_SETTINGS_FILE},
+  {"bind-addr",              required_argument, NULL, BIND_ADDR},
   {"log-file",               required_argument, NULL, LOG_FILE},
   {"log-level",              required_argument, NULL, LOG_LEVEL},
   {"pidfile",                required_argument, NULL, PIDFILE},
@@ -89,6 +94,7 @@ void usage(void)
        " --local-name <hostname>    Specify the name of the local memcached server\n"
        " --cluster-settings-file=<filename>\n"
        "                            The filename of the cluster settings file\n"
+       " --bind-addr=<IP>           The IP address to bind to (default: all)\n"
        " --log-file=<directory>     Log to file in specified directory\n"
        " --log-level=N              Set log level to N (default: 4)\n"
        " --pidfile=<filename>       Write pidfile\n"
@@ -144,6 +150,10 @@ int init_options(int argc, char**argv, struct options& options)
       options.cluster_settings_file = optarg;
       break;
 
+    case BIND_ADDR:
+      options.bind_addr = optarg;
+      break;
+
     case PIDFILE:
       options.pidfile = std::string(optarg);
       break;
@@ -195,7 +205,7 @@ void signal_handler(int sig)
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
 
-  CL_ASTAIRE_CRASHED.log(strsignal(sig));
+  CL_ASTAIRE_TERMINATED.log(strsignal(sig));
 
   // Dump a core.
   abort();
@@ -216,6 +226,7 @@ int main(int argc, char** argv)
   options.log_directory = "";
   options.local_memcached_server = "";
   options.cluster_settings_file = "";
+  options.bind_addr = "";
   options.pidfile = "";
   options.daemon = false;
 
@@ -297,11 +308,44 @@ int main(int argc, char** argv)
   MemcachedConfigReader* view_cfg =
     new MemcachedConfigFileReader(options.cluster_settings_file);
 
+  // Check that the cluster settings are valid. If they are not nothing is
+  // going to work and it is better to restart and have monit alarm.
+  MemcachedConfig dummy_cfg;
+  if (!view_cfg->read_config(dummy_cfg))
+  {
+    TRC_ERROR("Cluster view config is invalid. Exiting");
+    return 3;
+  }
+
   // Create statistics infrastructure.
   std::string stats[] = { "astaire_global", "astaire_connections" };
   LastValueCache* lvc = new LastValueCache(2, stats, "astaire");
   AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
+
+  // Create communication monitor for memcached
+  CommunicationMonitor* memcached_comm_monitor = new CommunicationMonitor(new Alarm("astaire",
+                                                                                    AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
+                                                                                    AlarmDef::CRITICAL),
+                                                                          "Astaire",
+                                                                          "Memcached");
+  // Create vbucket alarm
+  Alarm* vbucket_alarm = new Alarm("astaire",
+                                   AlarmDef::ASTAIRE_VBUCKET_ERROR,
+                                   AlarmDef::MAJOR);
+
+  MemcachedBackend* backend = new MemcachedBackend(view_cfg,
+                                                   memcached_comm_monitor,
+                                                   vbucket_alarm);
+
+  // Start the memcached proxy server.
+  ProxyServer* proxy_server = new ProxyServer(backend);
+  
+  if (!proxy_server->start(options.bind_addr.c_str()))
+  {
+    TRC_ERROR("Could not start proxy server, exiting");
+    return 4;
+  }
 
   // Start Astaire last as this might cause a resync to happen synchronously.
   Astaire* astaire = new Astaire(view,
@@ -317,6 +361,10 @@ int main(int argc, char** argv)
 
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
+  delete proxy_server; proxy_server = NULL;
+  delete memcached_comm_monitor; memcached_comm_monitor = NULL;
+  delete vbucket_alarm; vbucket_alarm = NULL;
+  delete backend; backend = NULL;
   delete per_conn_stats;
   delete global_stats;
   delete lvc;

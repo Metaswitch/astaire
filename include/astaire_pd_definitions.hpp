@@ -56,16 +56,16 @@ const static PDLog1<const char*> CL_ASTAIRE_INVALID_OPTION
 (
   PDLogBase::CL_ASTAIRE_ID + 1,
   PDLOG_ERR,
-  "Fatal - Unknown command line option %s.  Run with --help for options.",
-  "There was an invalid command line option in /etc/clearwater/config",
+  "Fatal - An invalid command line option, %s, was passed to Astaire. The application will exit and restart until the problem is fixed. Run with --help for options.",
+  "There was an invalid command line option in the configuration files.",
   "The application will exit and restart until the problem is fixed.",
-  "Correct the /etc/clearwater/config file."
+  "Check that the configuration files in /etc/clearwater and /etc/clearwater/cluster_settings are correct."
 );
 
 const static PDLog CL_ASTAIRE_STARTED
 (
   PDLogBase::CL_ASTAIRE_ID + 2,
-  PDLOG_ERR,
+  PDLOG_INFO,
   "Astaire started.",
   "The Astaire application is starting.",
   "Normal.",
@@ -80,14 +80,14 @@ const static PDLog CL_ASTAIRE_ENDED
   "Astaire has been terminated by Monit or has exited.",
   "The Astaire service is not longer available.",
     "(1). This occurs normally when Astaire is stopped. "
-    "(2). If Astaire hit an internal error then monit can restart Astaire."
+    "(2). If Astaire fails to respond to monit queries in a timely manner, monit restarts the application."
 );
 
-const static PDLog1<const char*> CL_ASTAIRE_CRASHED
+const static PDLog1<const char*> CL_ASTAIRE_TERMINATED
 (
   PDLogBase::CL_ASTAIRE_ID + 4,
   PDLOG_ERR,
-  "Fatal - Astaire has exited or crashed with signal %s.",
+  "Fatal - Astaire has exited or been terminated with signal %s.",
   "Astaire has encountered a fatal software error or has been terminated",
   "The application will exit and restart until the problem is fixed.",
   "Ensure that Astaire has been installed correctly and that it "
