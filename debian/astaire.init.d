@@ -118,7 +118,7 @@ do_start()
                      --log-file=$log_directory
                      --log-level=$log_level"
 
-        $namespace_prefix start-stop-daemon --start --quiet --background --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME --nicelevel 10 -- $DAEMON_ARGS --daemon --pidfile=$PIDFILE \
+        $namespace_prefix start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME --nicelevel 10 -- $DAEMON_ARGS --daemon --pidfile=$PIDFILE \
                 || return 2
         # Add code here, if necessary, that waits for the process to be ready
         # to handle requests from services started subsequently which depend
@@ -305,7 +305,7 @@ case "$1" in
         do_full_resync
         ;;
   *)
-        echo "Usage: $SCRIPTNAME {start|stop|status|restart|reload|force-reload|abort-restart|wait-sync}" >&2
+        echo "Usage: $SCRIPTNAME {start|stop|status|restart|reload|force-reload|abort|abort-restart|wait-sync|full-resync}" >&2
         exit 3
         ;;
 esac
