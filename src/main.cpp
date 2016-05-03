@@ -298,7 +298,7 @@ int main(int argc, char** argv)
     }
   }
 
-  Utils::start_signal_handlers();
+  start_signal_handlers();
 
   Alarm* astaire_resync_alarm = new Alarm("astaire",
                                           AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
