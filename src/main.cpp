@@ -300,10 +300,11 @@ int main(int argc, char** argv)
 
   start_signal_handlers();
 
-  Alarm* astaire_resync_alarm = new Alarm("astaire",
+  AlarmManager* alarm_manager = new AlarmManager();
+  Alarm* astaire_resync_alarm = new Alarm(alarm_manager,
+                                          "astaire",
                                           AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
                                           AlarmDef::MINOR);
-  AlarmReqAgent::get_instance().start();
 
   // These values match those in MemcachedStore's constructor
   MemcachedStoreView* view = new MemcachedStoreView(128, 2);
@@ -326,13 +327,15 @@ int main(int argc, char** argv)
   AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
 
   // Create communication monitor for memcached
-  CommunicationMonitor* memcached_comm_monitor = new CommunicationMonitor(new Alarm("astaire",
+  CommunicationMonitor* memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
+                                                                                    "astaire",
                                                                                     AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
                                                                                     AlarmDef::CRITICAL),
                                                                           "Astaire",
                                                                           "Memcached");
   // Create vbucket alarm
-  Alarm* vbucket_alarm = new Alarm("astaire",
+  Alarm* vbucket_alarm = new Alarm(alarm_manager,
+                                   "astaire",
                                    AlarmDef::ASTAIRE_VBUCKET_ERROR,
                                    AlarmDef::MAJOR);
 
@@ -359,8 +362,6 @@ int main(int argc, char** argv)
 
   sem_wait(&term_sem);
 
-  AlarmReqAgent::get_instance().stop();
-
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
   delete proxy_server; proxy_server = NULL;
@@ -371,6 +372,7 @@ int main(int argc, char** argv)
   delete global_stats;
   delete lvc;
   delete astaire;
+  delete alarm_manager; alarm_manager = NULL;
   delete view_cfg;
   delete view;
 
