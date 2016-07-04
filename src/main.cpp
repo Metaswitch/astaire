@@ -122,6 +122,10 @@ int init_logging_options(int argc, char**argv, struct options& options)
       options.log_level = atoi(optarg);
       break;
 
+    case DAEMON:
+      options.daemon = true;
+      break;
+
     default:
       // Ignore other options at this point
       break;
@@ -158,15 +162,12 @@ int init_options(int argc, char**argv, struct options& options)
       options.pidfile = std::string(optarg);
       break;
 
-    case DAEMON:
-      options.daemon = true;
-      break;
-
     case HELP:
       usage();
       CL_ASTAIRE_ENDED.log();
       exit(0);
 
+    case DAEMON:
     case LOG_LEVEL:
     case LOG_FILE:
       // Handled already in init_logging_options
@@ -240,14 +241,12 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  Log::setLoggingLevel(options.log_level);
-  boost::filesystem::path p = argv[0];
-  if (options.log_to_file && (options.log_directory != ""))
-  {
-    Log::setLogger(new Logger(options.log_directory, p.filename().string()));
-  }
-
-  TRC_STATUS("Log level set to %d", options.log_level);
+  Utils::daemon_log_setup(argc,
+                          argv,
+                          options.daemon,
+                          options.log_directory,
+                          options.log_level,
+                          options.log_to_file);
 
   std::stringstream options_ss;
   for (int ii = 0; ii < argc; ii++)
@@ -276,16 +275,6 @@ int main(int argc, char** argv)
   }
 
   TRC_STATUS("Astaire starting up");
-
-  if (options.daemon)
-  {
-    int errnum = Utils::daemonize();
-    if (errnum != 0)
-    {
-      TRC_ERROR("Failed to convert to daemon, %d (%s)", errnum, strerror(errnum));
-      exit(0);
-    }
-  }
 
   if (options.pidfile != "")
   {
