@@ -12,7 +12,7 @@ Homepage: http://projectclearwater.org/
 Package: astaire
 Architecture: any
 Recommends: memcached, clearwater-memcached, clearwater-snmp-handler-astaire
-Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, libzmq3, astaire-libs, cpulimit
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, libzmq5 | libzmq3, astaire-libs, cpulimit
 Suggests: astaire-dbg
 Description: Astaire, active resynchronisation for memcached clusters
 
