@@ -50,7 +50,7 @@ check process astaire_process pidfile /var/run/astaire/astaire.pid
      then exec "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5500.3; /etc/init.d/astaire abort-restart'"
 
 # Clear any alarms if the process has been running long enough.
-check program astaire_uptime with path /usr/share/clearwater/infrastructure/scripts/check-astaire-uptime
+check program astaire_uptime with path /usr/share/clearwater/infrastructure/monit_uptime/check-astaire-uptime
   group astaire
   depends on astaire_process
   every 3 cycles
