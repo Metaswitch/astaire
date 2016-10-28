@@ -13,7 +13,6 @@ astaire_SOURCES := memcached_tap_client.cpp \
                    utils.cpp \
                    logger.cpp \
                    log.cpp \
-                   pdlog.cpp \
                    alarm.cpp \
                    main.cpp \
                    proxy_server.cpp \

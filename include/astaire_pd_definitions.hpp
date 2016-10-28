@@ -43,9 +43,7 @@
 // The fields for each PDLog instance contains:
 //   Identity - Identifies the log id to be used in the syslog id field.
 //   Severity - One of Emergency, Alert, Critical, Error, Warning, Notice,
-//              and Info.  Directly corresponds to the syslog severity types.
-//              Only PDLOG_ERROR or PDLOG_NOTICE are used.
-//              See syslog_facade.h for definitions.
+//              and Info. Only LOG_ERROR or LOG_NOTICE are used.
 //   Message  - Formatted description of the condition.
 //   Cause    - The cause of the condition.
 //   Effect   - The effect the condition.
@@ -55,7 +53,7 @@
 const static PDLog1<const char*> CL_ASTAIRE_INVALID_OPTION
 (
   PDLogBase::CL_ASTAIRE_ID + 1,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - An invalid command line option, %s, was passed to Astaire. The application will exit and restart until the problem is fixed. Run with --help for options.",
   "There was an invalid command line option in the configuration files.",
   "The application will exit and restart until the problem is fixed.",
@@ -65,7 +63,7 @@ const static PDLog1<const char*> CL_ASTAIRE_INVALID_OPTION
 const static PDLog CL_ASTAIRE_STARTED
 (
   PDLogBase::CL_ASTAIRE_ID + 2,
-  PDLOG_INFO,
+  LOG_INFO,
   "Astaire started.",
   "The Astaire application is starting.",
   "Normal.",
@@ -75,7 +73,7 @@ const static PDLog CL_ASTAIRE_STARTED
 const static PDLog CL_ASTAIRE_ENDED
 (
   PDLogBase::CL_ASTAIRE_ID + 3,
-  PDLOG_ERR,
+  LOG_ERR,
   "Astaire ended - Termination signal received - terminating.",
   "Astaire has been terminated by Monit or has exited.",
   "The Astaire service is not longer available.",
@@ -86,7 +84,7 @@ const static PDLog CL_ASTAIRE_ENDED
 const static PDLog1<const char*> CL_ASTAIRE_TERMINATED
 (
   PDLogBase::CL_ASTAIRE_ID + 4,
-  PDLOG_ERR,
+  LOG_ERR,
   "Fatal - Astaire has exited or been terminated with signal %s.",
   "Astaire has encountered a fatal software error or has been terminated",
   "The application will exit and restart until the problem is fixed.",
@@ -97,7 +95,7 @@ const static PDLog1<const char*> CL_ASTAIRE_TERMINATED
 const static PDLog CL_ASTAIRE_RESYNC_FAILED
 (
   PDLog::CL_ASTAIRE_ID + 5,
-  PDLOG_ERR,
+  LOG_ERR,
   "Astaire has failed to synchronise some data.",
   "Astaire was unable to reach all the previous replicas for some data.",
   "Not all data has been resynchronised. Completing a resize operation now "
@@ -109,7 +107,7 @@ const static PDLog CL_ASTAIRE_RESYNC_FAILED
 const static PDLog CL_ASTAIRE_START_RESYNC
 (
   PDLog::CL_ASTAIRE_ID + 6,
-  PDLOG_INFO,
+  LOG_INFO,
   "Astaire has started a resync operation",
   "Astaire is proactively resynchronising data between cluster members."
     "This could be because:"
@@ -124,7 +122,7 @@ const static PDLog CL_ASTAIRE_START_RESYNC
 const static PDLog CL_ASTAIRE_COMPLETE_RESYNC
 (
   PDLog::CL_ASTAIRE_ID + 7,
-  PDLOG_INFO,
+  LOG_INFO,
   "Astaire has completed a resync operation",
   "Astaire has synchronised all available data to the local node.",
   "If the cluster is being resized, this operation can be completed once all other "
