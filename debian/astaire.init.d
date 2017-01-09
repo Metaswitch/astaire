@@ -210,7 +210,7 @@ do_wait_sync() {
 
                   if [ $num_conseq_unchanged -ge 120 ]
                   then
-                    logger astaire: Wait sync aborting as unsynced bucket count apparently stuck at $nodes
+                    logger astaire: Wait sync aborting as unsynced bucket count apparently stuck at $bucket_need_resync
                     break
                   fi
 
