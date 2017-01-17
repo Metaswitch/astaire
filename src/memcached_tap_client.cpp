@@ -472,7 +472,9 @@ Memcached::Status Memcached::Connection::recv(Memcached::BaseMessage** msg)
     else
     {
       int err = errno;
-      TRC_ERROR("Error during recv() on socket (%d)", err);
+      TRC_ERROR("Error during recv() on socket (%d: %s)",
+                err,
+                ::strerror(err));
       ::close(_sock); _sock = -1;
       return Memcached::Status::ERROR;
     }
@@ -530,6 +532,22 @@ int Memcached::ClientConnection::connect()
   }
 
   ::freeaddrinfo(ai); ai = NULL;
+
+  // Since Astaire uses blocking reads, set a (high) timeout on all read
+  // operations on the socket.  In the mainline, we'd expect all reads to
+  // succeed in < 100ms so using a timeout of 10s will never interfere with
+  // proper function.
+  struct timeval tv = { 10, 0 };
+  if (::setsockopt(_sock, SOL_SOCKET, SO_RCVTIMEO, (int*)&tv, sizeof(struct timeval)) < 0)
+  {
+    int err = errno;
+    TRC_ERROR("Failed to configure send timeout on connection to %s (%d: %s)",
+              _address.c_str(),
+              err,
+              ::strerror(err));
+    ::close(_sock); _sock = -1;
+    return err;
+  }
 
   return 0;
 }

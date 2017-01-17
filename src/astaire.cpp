@@ -291,6 +291,13 @@ void* Astaire::tap_buckets_thread(void *data)
         tap_data->success = false;
         finished = true;
       }
+      else
+      {
+        TRC_ERROR("Unexpected response type %d to TAP_MUTATE request",
+                  rsp->op_code());
+        tap_data->success = false;
+        finished = true;
+      }
     }
     else
     {
@@ -429,6 +436,13 @@ void* Astaire::tap_buckets_thread(void *data)
           bucket_stats->increment_bandwidth(bytes);
           tap_data->conn_stats->unlock();
         }
+      }
+      else
+      {
+        TRC_ERROR("Unexpected request type %d during TAP stream",
+                  req->op_code());
+        tap_data->success = false;
+        finished = true;
       }
     }
 
