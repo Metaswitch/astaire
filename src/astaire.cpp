@@ -269,12 +269,14 @@ void* Astaire::tap_buckets_thread(void *data)
     Memcached::Status status = tap_conn.recv(&msg);
     if (status == Memcached::Status::ERROR)
     {
+      TRC_ERROR("Error while tapping %s", tap_data->tap_server.c_str());
       tap_data->success = false;
       finished = true;
       break;
     }
     else if (status == Memcached::Status::DISCONNECTED)
     {
+      TRC_INFO("Tap of %s completed", tap_data->tap_server.c_str());
       finished = true;
       break;
     }
@@ -293,7 +295,8 @@ void* Astaire::tap_buckets_thread(void *data)
       }
       else
       {
-        TRC_ERROR("Unexpected response type %d to TAP_MUTATE request",
+        TRC_ERROR("Unexpected response from %s of type %d to TAP_MUTATE request",
+                  tap_data->tap_server.c_str(),
                   rsp->op_code());
         tap_data->success = false;
         finished = true;
@@ -439,7 +442,8 @@ void* Astaire::tap_buckets_thread(void *data)
       }
       else
       {
-        TRC_ERROR("Unexpected request type %d during TAP stream",
+        TRC_ERROR("Unexpected request from %s of type %d during TAP stream",
+                  tap_data->tap_server.c_str(),
                   req->op_code());
         tap_data->success = false;
         finished = true;

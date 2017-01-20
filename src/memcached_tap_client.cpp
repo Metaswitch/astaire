@@ -507,8 +507,9 @@ int Memcached::ClientConnection::connect()
   int rc = getaddrinfo(host.c_str(), std::to_string(port).c_str(), &ai_hint, &ai);
   if (rc < 0)
   {
-    TRC_ERROR("Failed to resolve hostname %s (%s)",
+    TRC_ERROR("Failed to resolve hostname %s (%d, %s)",
               _address.c_str(),
+              rc,
               gai_strerror(rc));
     return rc;
   }
@@ -517,16 +518,17 @@ int Memcached::ClientConnection::connect()
   if (_sock < 0)
   {
     int err = errno;
-    TRC_ERROR("Failed to create socket (%d)", err);
+    TRC_ERROR("Failed to create socket (%d: %s)", err, strerror(err));
     return err;
   }
 
   if (::connect(_sock, ai->ai_addr, ai->ai_addrlen) < 0)
   {
     int err = errno;
-    TRC_ERROR("Failed to connect to %s (%d)",
+    TRC_ERROR("Failed to connect to %s (%d: %s)",
               _address.c_str(),
-              err);
+              err,
+              strerror(err));
     ::close(_sock); _sock = -1;
     return err;
   }
