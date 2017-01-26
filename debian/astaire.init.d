@@ -188,13 +188,23 @@ do_wait_sync() {
         num_cycles_unchanged=0
         while true
         do
-                # Retrieve the statistics.
-                stats="`/usr/share/clearwater/astaire/bin/cw_stat astaire astaire_global |
-                       egrep '(buckets(NeedingResync|Resynchronized)|entriesResynchronized)' |
-                       cut -d: -f2`"
-                bucket_need_resync=`echo $stats | cut -d\  -f1`
-                bucket_resynchronized=`echo $stats | cut -d\  -f2`
-                entry_resynchronized=`echo $stats | cut -d\  -f3`
+                # Retrieve the statistics. Check that we got the statistics from Astaire -
+                # if we didn't then Astaire probably isn't running, and there's no use
+                # waiting for it to sync.
+                stats=$(/usr/share/clearwater/astaire/bin/cw_stat astaire astaire_global)
+                if [ $? != 0 ]
+                then
+                  logger astaire: Wait sync aborting as unable to get statistics from Astaire
+                  break
+                fi
+
+                parsed_stats=$(echo "$stats" |
+                               egrep '(buckets(NeedingResync|Resynchronized)|entriesResynchronized)' |
+                               cut -d: -f2)
+
+                bucket_need_resync=`echo $parsed_stats | cut -d\  -f1`
+                bucket_resynchronized=`echo $parsed_stats | cut -d\  -f2`
+                entry_resynchronized=`echo $parsed_stats | cut -d\  -f3`
 
                 # If the number of buckets needing resync is 0, we're finished
                 if [ "$bucket_need_resync" = "0" ]
