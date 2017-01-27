@@ -283,6 +283,13 @@ void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)
           }
           break;
 
+        case (uint8_t)Memcached::OpCode::QUIT:
+          {
+            TRC_DEBUG("QUIT operation received");
+            keep_going = false;
+          }
+          break;
+
         default:
           {
             TRC_WARNING("Unrecognized operation: %d", req->op_code());
