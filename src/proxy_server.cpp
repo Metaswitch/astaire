@@ -285,7 +285,6 @@ void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)
 
         case (uint8_t)Memcached::OpCode::QUIT:
           {
-            //TRC_DEBUG("QUIT operation received");
             TRC_DEBUG("QUIT operation received");
             keep_going = false;
           }
