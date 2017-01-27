@@ -90,6 +90,7 @@ namespace Memcached
     ADD = 0x02,
     REPLACE = 0x03,
     DELETE = 0x04,
+    QUIT = 0x07,
     VERSION = 0x0b,
     GETK = 0x0c,
     TAP_CONNECT = 0x40,
