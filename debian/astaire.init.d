@@ -126,6 +126,33 @@ do_start()
 }
 
 #
+# Function that runs the daemon/service in the foreground
+#
+do_run()
+{
+        # Allow us to write to the pidfile directory
+        install -m 755 -o $NAME -g root -d /var/run/$NAME && chown -R $NAME /var/run/$NAME
+
+        export LD_LIBRARY_PATH=/usr/share/clearwater/astaire/lib
+        ulimit -Hn 1000000
+        ulimit -Sn 1000000
+        ulimit -c unlimited
+        # enable gdb to dump a parent astaire process's stack
+        echo 0 > /proc/sys/kernel/yama/ptrace_scope
+        get_settings
+        DAEMON_ARGS="--local-name=$local_ip:11211
+                     --cluster-settings-file=/etc/clearwater/cluster_settings
+                     --log-file=$log_directory
+                     --log-level=$log_level"
+
+        $namespace_prefix start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --chuid $NAME --chdir $HOME --nicelevel 10 -- $DAEMON_ARGS --pidfile=$PIDFILE \
+                || return 2
+        # Add code here, if necessary, that waits for the process to be ready
+        # to handle requests from services started subsequently which depend
+        # on this one.  As a last resort, sleep for some time.
+}
+
+#
 # Function that stops the daemon/service
 #
 do_stop()
@@ -278,6 +305,14 @@ case "$1" in
                 2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
         esac
         ;;
+  run)
+        [ "$VERBOSE" != no ] && log_daemon_msg "Running $DESC" "$NAME"
+        do_run
+        case "$?" in
+                0|1) [ "$VERBOSE" != no ] && log_end_msg 0 ;;
+                2) [ "$VERBOSE" != no ] && log_end_msg 1 ;;
+        esac
+        ;;
   stop)
         [ "$VERBOSE" != no ] && log_daemon_msg "Stopping $DESC" "$NAME"
         do_stop
@@ -343,7 +378,7 @@ case "$1" in
         do_full_resync
         ;;
   *)
-        echo "Usage: $SCRIPTNAME {start|stop|status|restart|reload|force-reload|abort|abort-restart|wait-sync|full-resync}" >&2
+        echo "Usage: $SCRIPTNAME {start|run|stop|status|restart|reload|force-reload|abort|abort-restart|wait-sync|full-resync}" >&2
         exit 3
         ;;
 esac
