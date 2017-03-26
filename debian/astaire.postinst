@@ -92,7 +92,7 @@ case "$1" in
         # running (though it does return non-0 in this scenario).
         start astaire-throttle || /bin/true
 
-        /usr/share/clearwater/infrastructure/scripts/astaire.monit
+        invoke-rc.d clearwater-infrastructure restart
 
         # Restart astaire.  Always do this by terminating astaire so monit will
         # restart it more-or-less immediately.  (monit restart seems to have
