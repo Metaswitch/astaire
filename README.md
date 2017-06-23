@@ -18,7 +18,7 @@ If you want to run a large Clearwater deployment (or any large `MemcachedStore`-
 
 Astaire is very easy to use, and integrates into the standard resizing algorithm for a `MemcachedStore`-based cluster:
 
-1. Update the `/etc/clearwater/cluster_settings` file to contain the `servers` and `new_servers` lines on each node.
+1. Update the `/etc/clearwater/cluster_settings` file to contain `servers` and `new_servers` lines on each node.
 1. Reload the `MemcachedStore` (to pick up those changes) on each node.
 1. Run `sudo service astaire reload` on each node in the cluster.
 1. Run `sudo service astaire wait-sync` on each node (this will wait until the resynchronization has completed).
