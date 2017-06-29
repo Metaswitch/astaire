@@ -150,7 +150,7 @@ int init_options(int argc, char**argv, struct options& options)
 
     default:
       CL_ASTAIRE_INVALID_OPTION.log(argv[optind - 1]);
-      TRC_ERROR("Unknown option: %s.  Run with --help for options.\n",
+      TRC_ERROR("Unknown option: %s.  Run with --help for options.",
                 argv[optind - 1]);
       exit(2);
     }
