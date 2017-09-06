@@ -36,7 +36,6 @@ MemcachedBackend::MemcachedBackend(MemcachedConfigReader* config_reader,
                                    BaseCommunicationMonitor* comm_monitor,
                                    Alarm* vbucket_alarm) :
   _updater(NULL),
-  _conn_pool(),
   _replicas(2),
   _vbuckets(128),
   _options(),
