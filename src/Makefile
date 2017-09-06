@@ -16,6 +16,7 @@ astaire_SOURCES := memcached_tap_client.cpp \
                    alarm.cpp \
                    main.cpp \
                    proxy_server.cpp \
+                   memcached_connection_pool.cpp \
                    memcached_backend.cpp \
                    base_communication_monitor.cpp \
                    communicationmonitor.cpp

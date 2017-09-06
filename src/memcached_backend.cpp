@@ -39,9 +39,7 @@ MemcachedBackend::MemcachedBackend(MemcachedConfigReader* config_reader,
   _replicas(2),
   _vbuckets(128),
   _options(),
-  _view_number(0),
   _servers(),
-  _max_connect_latency_ms(50),
   _read_replicas(_vbuckets),
   _write_replicas(_vbuckets),
   _comm_monitor(comm_monitor),
@@ -50,9 +48,6 @@ MemcachedBackend::MemcachedBackend(MemcachedConfigReader* config_reader,
   _vbucket_alarm(vbucket_alarm),
   _config_reader(config_reader)
 {
-  // Create the thread local key for the per thread data.
-  pthread_key_create(&_thread_local, MemcachedBackend::cleanup_connection);
-
   // Create the lock for protecting the current view.
   pthread_rwlock_init(&_view_lock, NULL);
 
@@ -68,6 +63,9 @@ MemcachedBackend::MemcachedBackend(MemcachedConfigReader* config_reader,
   // Create an updater to keep the store configured appropriately.
   _updater = new Updater<void, MemcachedBackend>(this, std::mem_fun(&MemcachedBackend::update_config));
 
+  // Create the connection pool.
+  _conn_pool = new MemcachedConnectionPool(60, _options, false);
+
   // Initialize vbucket comm state
   for (int ii = 0; ii < _vbuckets; ++ii)
   {
@@ -81,29 +79,13 @@ MemcachedBackend::~MemcachedBackend()
   // Destroy the updater.
   delete _updater; _updater = NULL;
 
-  // Clean up this thread's connection now, rather than waiting for
-  // pthread_exit.  This is to support use by single-threaded code
-  // (e.g., UTs), where pthread_exit is never called.
-  connection* conn = (connection*)pthread_getspecific(_thread_local);
-  if (conn != NULL)
-  {
-    pthread_setspecific(_thread_local, NULL);
-    cleanup_connection(conn);
-  }
-
   pthread_mutex_destroy(&_vbucket_comm_lock);
 
   pthread_rwlock_destroy(&_view_lock);
-
-  pthread_key_delete(_thread_local);
 }
 
 
 // LCOV_EXCL_START - need real memcached to test
-void MemcachedBackend::set_max_connect_latency(unsigned int ms)
-{
-  _max_connect_latency_ms = ms;
-}
 
 /// Set up a new view of the memcached cluster(s).  The view determines
 /// how data is distributed around the cluster.
@@ -128,10 +110,7 @@ void MemcachedBackend::new_view(const MemcachedConfig& config)
     _write_replicas[ii] = view.write_replicas(ii);
   }
 
-  // Update the view number as the last thing here, otherwise we could stall
-  // other threads waiting for the lock.
-  TRC_STATUS("Finished preparing new view, so flag that workers should switch to it");
-  ++_view_number;
+  TRC_STATUS("Finished preparing new view");
 
   pthread_rwlock_unlock(&_view_lock);
 }
@@ -163,115 +142,61 @@ int MemcachedBackend::vbucket_for_key(const std::string& key)
 }
 
 
-/// Gets the set of replicas to use for a read or write operation for the
-/// specified key.
-const std::vector<memcached_st*>&
-MemcachedBackend::get_replicas(const std::string& key, Op operation)
+/// Gets the set of replica addresses to use for a read or write operation for
+/// the specified key.
+const std::vector<AddrInfo>
+MemcachedBackend::get_replica_addresses(const std::string& key, Op operation)
 {
-  return get_replicas(vbucket_for_key(key), operation);
+  return get_replica_addresses(vbucket_for_key(key), operation);
 }
 
 
-/// Gets the set of replicas to use for a read or write operation for the
-/// specified vbucket.
-const std::vector<memcached_st*>& MemcachedBackend::get_replicas(int vbucket,
-                                                                   Op operation)
+/// Gets the set of replica addresses to use for a read or write operation for
+/// the specified vbucket.
+const std::vector<AddrInfo> MemcachedBackend::get_replica_addresses(int vbucket,
+                                                                    Op operation)
 {
-  MemcachedBackend::connection* conn = (connection*)pthread_getspecific(_thread_local);
-  if (conn == NULL)
+  // Choose the right replica list based on the operation type.
+  std::vector<std::string> replica_list;
+  if (operation == Op::READ)
   {
-    // Create a new connection structure for this thread.
-    conn = new MemcachedBackend::connection;
-    pthread_setspecific(_thread_local, conn);
-    conn->view_number = 0;
+    replica_list = _read_replicas[vbucket];
+  }
+  else
+  {
+    replica_list = _write_replicas[vbucket];
   }
 
-  if (conn->view_number != _view_number)
+  // Turn the address strings into AddrInfo objects. Do this by splitting the
+  // string into a hostname and port, then attempting to parse the hostname
+  // part as an IPv4 or IPv6 address.
+  std::vector<AddrInfo> replica_addresses;
+  AddrInfo ai;
+  std::string host;
+  int port;
+  for (std::vector<std::string>::iterator it = replica_list.begin();
+       it != replica_list.end();
+       ++it)
   {
-    // Either the view has changed or has not yet been set up, so set up the
-    // connection and replica structures for this thread.
-    for (std::map<std::string, memcached_st*>::iterator it = conn->st.begin();
-         it != conn->st.end();
-         it++)
+    if (Utils::split_host_port(*it, host, port))
     {
-      memcached_free(it->second);
-      it->second = NULL;
-    }
-    pthread_rwlock_rdlock(&_view_lock);
-
-    TRC_DEBUG("Set up new view %d for thread", _view_number);
-
-    // Create a set of memcached_st's one per server.
-    for (size_t ii = 0; ii < _servers.size(); ++ii)
-    {
-      // Create a new memcached_st for this server.  Do not specify the server
-      // at this point as memcached() does not support IPv6 addresses.
-      TRC_DEBUG("Setting up server %d for connection %p (%s)", ii, conn, _options.c_str());
-      conn->st[_servers[ii]] = memcached(_options.c_str(), _options.length());
-      TRC_DEBUG("Set up connection %p to server %s", conn->st[_servers[ii]], _servers[ii].c_str());
-
-      // Switch to a longer connect timeout from here on.
-      memcached_behavior_set(conn->st[_servers[ii]], MEMCACHED_BEHAVIOR_CONNECT_TIMEOUT, _max_connect_latency_ms);
-
-      // Disable Nagle's algorithm
-      // (https://en.wikipedia.org/wiki/Nagle%27s_algorithm). If we leave it on
-      // there can be up to 500ms delay between this code sending an
-      // asynchronous SET and it actually being sent on the wire, e.g.
-      //
-      // * Ask libmemcached to do async SET.
-      // * Async SET sent on the wire.
-      // * Ask libmemcached to do a 2nd async SET.
-      // * Up to 500ms passes.
-      // * TCP stack receives ACK to 1st SET (may be delayed because the server
-      //   does not send a protocol level response to the async SET).
-      // * 2nd async SET sent on the wire (up to 500ms late).
-      //
-      // This delay can open up window conditions in failure scenarios. In
-      // addition there is not much point in using Nagle. libmemcached's buffers
-      // are large enough that it will never send small message fragments, and
-      // this store's implementation means we very rarely pipeline requests.
-      memcached_behavior_set(conn->st[_servers[ii]], MEMCACHED_BEHAVIOR_TCP_NODELAY, true);
-
-      std::string server;
-      int port;
-      if (Utils::split_host_port(_servers[ii], server, port))
+      if (Utils::parse_ip_target(host, ai.address))
       {
-        TRC_DEBUG("Setting server to IP address %s port %d",
-                  server.c_str(),
-                  port);
-        memcached_server_add(conn->st[_servers[ii]], server.c_str(), port);
+        ai.port = port;
+        replica_addresses.push_back(ai);
       }
       else
       {
-        TRC_ERROR("Malformed host/port %s, skipping server", _servers[ii].c_str());
+        TRC_ERROR("Host %s is not a valid IPv4/6 address, skipping server", host.c_str());
       }
     }
-
-    conn->read_replicas.resize(_vbuckets);
-    conn->write_replicas.resize(_vbuckets);
-
-    // Now set up the read and write replica sets.
-    for (int ii = 0; ii < _vbuckets; ++ii)
+    else
     {
-      conn->read_replicas[ii].resize(_read_replicas[ii].size());
-      for (size_t jj = 0; jj < _read_replicas[ii].size(); ++jj)
-      {
-        conn->read_replicas[ii][jj] = conn->st[_read_replicas[ii][jj]];
-      }
-      conn->write_replicas[ii].resize(_write_replicas[ii].size());
-      for (size_t jj = 0; jj < _write_replicas[ii].size(); ++jj)
-      {
-        conn->write_replicas[ii][jj] = conn->st[_write_replicas[ii][jj]];
-      }
+      TRC_ERROR("Malformed host/port %s, skipping server", (*it).c_str());
     }
-
-    // Flag that we are in sync with the latest view.
-    conn->view_number = _view_number;
-
-    pthread_rwlock_unlock(&_view_lock);
   }
 
-  return (operation == Op::READ) ? conn->read_replicas[vbucket] : conn->write_replicas[vbucket];
+  return replica_addresses;
 }
 
 
@@ -330,24 +255,6 @@ unsigned long MemcachedBackend::current_time_ms()
   return ts.tv_sec * 1000 + (ts.tv_nsec / 1000000);
 }
 
-/// Called to clean up the thread local data for a thread using the
-/// MemcachedBackend class.
-void MemcachedBackend::cleanup_connection(void* p)
-{
-  MemcachedBackend::connection* conn = (MemcachedBackend::connection*)p;
-
-  for (std::map<std::string, memcached_st*>::iterator it = conn->st.begin();
-       it != conn->st.end();
-       it++)
-  {
-    memcached_free(it->second);
-    it->second = NULL;
-  }
-
-  delete conn;
-}
-
-
 Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
                                                   std::string& data,
                                                   uint64_t& cas)
@@ -355,9 +262,9 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
   Memcached::ResultCode status = Memcached::ResultCode::NO_ERROR;
 
   int vbucket = vbucket_for_key(key);
-  const std::vector<memcached_st*>& replicas = get_replicas(vbucket, Op::READ);
+  const std::vector<AddrInfo>& replica_addresses = get_replica_addresses(vbucket, Op::READ);
 
-  TRC_DEBUG("%d read replicas for key %s", replicas.size(), key.c_str());
+  TRC_DEBUG("%d read replicas for key %s", replica_addresses.size(), key.c_str());
 
   // Read from all replicas until we get a positive result.
   memcached_return_t rc = MEMCACHED_ERROR;
@@ -369,13 +276,13 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
   // libmemcached won't notice a dropped TCP connection until it tries
   // to make a request on it, and will fail the request then
   // reconnect, so the second attempt could still work.
-  size_t attempts = (replicas.size() == 1) ? 2 : replicas.size();
+  size_t attempts = (replica_addresses.size() == 1) ? 2 : replica_addresses.size();
 
   for (ii = 0; ii < attempts; ++ii)
   {
     size_t replica_idx;
 
-    if ((replicas.size() == 1) && (ii == 1))
+    if ((replica_addresses.size() == 1) && (ii == 1))
     {
       if (rc != MEMCACHED_CONNECTION_FAILURE)
       {
@@ -391,10 +298,14 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
       replica_idx = ii;
     }
 
+    // Get a memcached_st object from the connection pool.
+    ConnectionHandle<memcached_st*> conn_handle = _conn_pool->get_connection(replica_addresses[replica_idx]);
+    memcached_st* conn = conn_handle.get_connection();
+
     TRC_DEBUG("Attempt to read from replica %d (connection %p)",
               replica_idx,
-              replicas[replica_idx]);
-    rc = get_from_replica(replicas[replica_idx], key.c_str(), key.length(), data, cas);
+              conn);
+    rc = get_from_replica(conn, key.c_str(), key.length(), data, cas);
 
     if (memcached_success(rc))
     {
@@ -416,7 +327,7 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
     {
       // Error from this node, so consider it inactive.
       TRC_DEBUG("Read for %s on replica %d returned error %d (%s)",
-                key.c_str(), replica_idx, rc, memcached_strerror(replicas[replica_idx], rc));
+                key.c_str(), replica_idx, rc, memcached_strerror(conn, rc));
       ++failed_replicas;
     }
   }
@@ -444,7 +355,7 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
       _comm_monitor->inform_success();
     }
   }
-  else if (failed_replicas < replicas.size())
+  else if (failed_replicas < replica_addresses.size())
   {
     // At least one replica returned NOT_FOUND.
     TRC_DEBUG("At least one replica returned not found, so return NOT_FOUND");
@@ -462,7 +373,7 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
     // All replicas returned an error, so log the error and return the
     // failure.
     TRC_ERROR("Failed to read data for %s from %d replicas",
-              key.c_str(), replicas.size());
+              key.c_str(), replica_addresses.size());
 
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
 
@@ -498,9 +409,9 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
             data.length(), key.c_str(), operation, cas, expiry);
 
   int vbucket = vbucket_for_key(key);
-  const std::vector<memcached_st*>& replicas = get_replicas(vbucket, Op::WRITE);
+  const std::vector<AddrInfo>& replica_addresses = get_replica_addresses(vbucket, Op::WRITE);
 
-  TRC_DEBUG("%d write replicas for key %s", replicas.size(), key.c_str());
+  TRC_DEBUG("%d write replicas for key %s", replica_addresses.size(), key.c_str());
 
   // Calculate a timestamp (least-significant 32 bits of milliseconds since the
   // epoch) for the current time.  We store this in the flags field to allow us
@@ -519,11 +430,11 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
   // libmemcached won't notice a dropped TCP connection until it tries
   // to make a request on it, and will fail the request then
   // reconnect, so the second attempt could still work.
-  size_t attempts = (replicas.size() == 1) ? 2: replicas.size();
+  size_t attempts = (replica_addresses.size() == 1) ? 2: replica_addresses.size();
 
   for (ii = 0; ii < attempts; ++ii)
   {
-    if ((replicas.size() == 1) && (ii == 1))
+    if ((replica_addresses.size() == 1) && (ii == 1))
     {
       if (rc != MEMCACHED_CONNECTION_FAILURE)
       {
@@ -539,16 +450,20 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
       replica_idx = ii;
     }
 
+    // Get a memcached_st object from the connection pool.
+    ConnectionHandle<memcached_st*> conn_handle = _conn_pool->get_connection(replica_addresses[replica_idx]);
+    memcached_st* conn = conn_handle.get_connection();
+
     TRC_DEBUG("Attempt conditional write to vbucket %d on replica %d (connection %p), CAS = %ld, expiry = %d",
               vbucket,
               replica_idx,
-              replicas[replica_idx],
+              conn,
               cas,
               expiry);
 
     if (operation == Memcached::OpCode::ADD)
     {
-      rc = memcached_add_vb(replicas[replica_idx],
+      rc = memcached_add_vb(conn,
                             key.c_str(),
                             key.length(),
                             vbucket,
@@ -559,7 +474,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
     }
     else if (operation == Memcached::OpCode::SET)
     {
-      rc = memcached_set_vb(replicas[replica_idx],
+      rc = memcached_set_vb(conn,
                             key.c_str(),
                             key.length(),
                             vbucket,
@@ -572,7 +487,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
     {
       if (cas == 0)
       {
-        rc = memcached_replace_vb(replicas[replica_idx],
+        rc = memcached_replace_vb(conn,
                                   key.c_str(),
                                   key.length(),
                                   vbucket,
@@ -583,7 +498,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
       }
       else
       {
-        rc = memcached_cas_vb(replicas[replica_idx],
+        rc = memcached_cas_vb(conn,
                               key.c_str(),
                               key.length(),
                               vbucket,
@@ -597,8 +512,8 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
         {
           TRC_DEBUG("memcached_cas command failed, rc = %d (%s)\n%s",
                     rc,
-                    memcached_strerror(replicas[replica_idx], rc),
-                    memcached_last_error_message(replicas[replica_idx]));
+                    memcached_strerror(conn, rc),
+                    memcached_last_error_message(conn));
         }
       }
     }
@@ -621,15 +536,20 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
     }
   }
 
-  if (memcached_success(rc) && (replica_idx < replicas.size()))
+  if (memcached_success(rc) && (replica_idx < replica_addresses.size()))
   {
     // Write has succeeded, so write unconditionally (and asynchronously)
     // to the replicas.
-    for (size_t jj = replica_idx + 1; jj < replicas.size(); ++jj)
+    for (size_t jj = replica_idx + 1; jj < replica_addresses.size(); ++jj)
     {
       TRC_DEBUG("Attempt unconditional write to replica %d", jj);
-      memcached_behavior_set(replicas[jj], MEMCACHED_BEHAVIOR_NOREPLY, 1);
-      memcached_set_vb(replicas[jj],
+
+      // Get a memcached_st object from the connection pool.
+      ConnectionHandle<memcached_st*> conn_handle = _conn_pool->get_connection(replica_addresses[jj]);
+      memcached_st* conn = conn_handle.get_connection();
+
+      memcached_behavior_set(conn, MEMCACHED_BEHAVIOR_NOREPLY, 1);
+      memcached_set_vb(conn,
                        key.c_str(),
                        key.length(),
                        vbucket,
@@ -637,7 +557,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
                        data.length(),
                        expiry,
                        flags);
-      memcached_behavior_set(replicas[jj], MEMCACHED_BEHAVIOR_NOREPLY, 0);
+      memcached_behavior_set(conn, MEMCACHED_BEHAVIOR_NOREPLY, 0);
     }
   }
 
@@ -654,7 +574,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
     }
 
     TRC_ERROR("Failed to write data for %s to %d replicas",
-              key.c_str(), replicas.size());
+              key.c_str(), replica_addresses.size());
 
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
   }
@@ -680,19 +600,23 @@ Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key)
 
   // Delete from the read replicas - read replicas are a superset of the write
   // replicas
-  const std::vector<memcached_st*>& replicas = get_replicas(key, Op::READ);
+  const std::vector<AddrInfo>& replica_addresses = get_replica_addresses(key, Op::READ);
   TRC_DEBUG("Deleting from the %d read replicas for key %s",
-            replicas.size(), key.c_str());
+            replica_addresses.size(), key.c_str());
 
   const char* key_ptr = key.data();
   const size_t key_len = key.length();
 
-  for (size_t ii = 0; ii < replicas.size(); ++ii)
+  for (size_t ii = 0; ii < replica_addresses.size(); ++ii)
   {
-    TRC_DEBUG("Attempt delete to replica %d (connection %p)",
-              ii, replicas[ii]);
+    // Get a memcached_st object from the connection pool.
+    ConnectionHandle<memcached_st*> conn_handle = _conn_pool->get_connection(replica_addresses[ii]);
+    memcached_st* conn = conn_handle.get_connection();
 
-    memcached_return_t rc = memcached_delete(replicas[ii],
+    TRC_DEBUG("Attempt delete to replica %d (connection %p)",
+              ii, conn);
+
+    memcached_return_t rc = memcached_delete(conn,
                                              key_ptr,
                                              key_len,
                                              0);

@@ -26,10 +26,12 @@ extern "C" {
 #include "memcached_tap_client.hpp"
 #include "memcached_config.h"
 #include "memcachedstoreview.h"
+#include "memcached_connection_pool.h"
 #include "updater.h"
 #include "sas.h"
 #include "sasevent.h"
 #include "communicationmonitor.h"
+#include "utils.h"
 
 
 class MemcachedBackend
@@ -46,8 +48,6 @@ public:
   void new_view(const MemcachedConfig& config);
 
   bool has_servers() { return (_servers.size() > 0); };
-
-  void set_max_connect_latency(unsigned int ms);
 
   /// Gets the data for the specified key.
   Memcached::ResultCode read_data(const std::string& key,
@@ -68,31 +68,13 @@ public:
   void update_config();
 
 private:
-  // A copy of this structure is maintained for each worker thread, as
-  // thread local data.
-  typedef struct connection
-  {
-    // Indicates the view number being used by this thread.  When the view
-    // changes the global view number is updated and each thread switches to
-    // the new view by establishing new memcached_st's.
-    uint64_t view_number;
-
-    // Contains the memcached_st's for each server.
-    std::map<std::string, memcached_st*> st;
-
-    // Contains the set of read and write replicas for each vbucket.
-    std::vector<std::vector<memcached_st*> > write_replicas;
-    std::vector<std::vector<memcached_st*> > read_replicas;
-
-  } connection;
-
   /// Returns the vbucket for a specified key.
   int vbucket_for_key(const std::string& key);
 
-  /// Gets the set of connections to use for a read or write operation.
+  /// Gets the set of replica addresses to use for a read or write operation.
   typedef enum {READ, WRITE} Op;
-  const std::vector<memcached_st*>& get_replicas(const std::string& key, Op operation);
-  const std::vector<memcached_st*>& get_replicas(int vbucket, Op operation);
+  const std::vector<AddrInfo> get_replica_addresses(const std::string& key, Op operation);
+  const std::vector<AddrInfo> get_replica_addresses(int vbucket, Op operation);
 
   /// Used to set the communication state for a vbucket after a get/set.
   typedef enum {OK, FAILED} CommState;
@@ -103,9 +85,6 @@ private:
   unsigned long current_time_ms();
   // Only send alarm updates if 30 seconds have passed since last update
   unsigned int _update_period_ms = 30 * 1000;
-
-  // Called by the thread-local-storage clean-up functions when a thread ends.
-  static void cleanup_connection(void* p);
 
   // Perform a get request to a single replica.
   memcached_return_t get_from_replica(memcached_st* replica,
@@ -131,8 +110,9 @@ private:
   // Stores a pointer to an updater object
   Updater<void, MemcachedBackend>* _updater;
 
-  // Used to store a connection structure for each worker thread.
-  pthread_key_t _thread_local;
+  // Used to store a pool of memcached connections to be used by worker
+  // threads.
+  MemcachedConnectionPool* _conn_pool;
 
   // Stores the number of replicas configured for the store (one means the
   // data is stored on one server, two means it is stored on two servers etc.).
@@ -147,21 +127,12 @@ private:
   // current view.
   std::string _options;
 
-  // The current global view number.  Note that this is not protected by the
-  // _view_lock.
-  uint64_t _view_number;
-
   // The lock used to protect the view parameters below (_servers,
   // _read_replicas and _write_replicas).
   pthread_rwlock_t _view_lock;
 
   // The list of servers in this view.
   std::vector<std::string> _servers;
-
-  // The time to wait before timing out a connection to memcached.
-  // (This is only used during normal running - at start-of-day we use
-  // a fixed 10ms time, to start up as quickly as possible).
-  unsigned int _max_connect_latency_ms;
 
   // The set of read and write replicas for each vbucket.
   std::vector<std::vector<std::string> > _read_replicas;
