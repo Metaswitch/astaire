@@ -56,11 +56,9 @@ log_directory=/var/log/$NAME
 get_settings()
 {
         # Set up defaults and then pull in the settings for this node.
-        . /etc/clearwater/config
-
-        # Set up defaults for user settings then pull in any overrides.
         log_level=2
-        [ -r /etc/clearwater/user_settings ] && . /etc/clearwater/user_settings
+        . /etc/clearwater/config
+        
         [ -z "$signaling_namespace" ] || namespace_prefix="ip netns exec $signaling_namespace"
 }
 
