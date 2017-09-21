@@ -240,23 +240,20 @@ void* Astaire::tap_buckets_thread(void *data)
   bool finished = false;
   do
   {
-    Memcached::BaseMessage* msg;
+    Memcached::BaseMessage* msg = NULL;
     Memcached::Status status = tap_conn.recv(&msg);
     if (status == Memcached::Status::ERROR)
     {
       TRC_ERROR("Error while tapping %s", tap_data->tap_server.c_str());
       tap_data->success = false;
       finished = true;
-      break;
     }
     else if (status == Memcached::Status::DISCONNECTED)
     {
       TRC_INFO("Tap of %s completed", tap_data->tap_server.c_str());
       finished = true;
-      break;
     }
-
-    if (msg->is_response())
+    else if (msg->is_response())
     {
       Memcached::BaseRsp* rsp = (Memcached::BaseRsp*)msg;
       if (rsp->op_code() == (uint8_t)Memcached::OpCode::TAP_CONNECT)
