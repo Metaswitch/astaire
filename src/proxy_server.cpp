@@ -96,7 +96,7 @@ bool ProxyServer::start(const char* bind_addr)
   }
 
   // Start listening on the socket.
-  rc = listen(_listen_sock, 5);
+  rc = listen(_listen_sock, 500);
   if (rc < 0)
   {
     TRC_ERROR("Could not listen on socket: %d, %s", rc, strerror(errno));
