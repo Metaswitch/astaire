@@ -15,6 +15,8 @@ astaire_SOURCES := memcached_tap_client.cpp \
                    log.cpp \
                    alarm.cpp \
                    main.cpp \
+                   health_checker.cpp \
+                   exception_handler.cpp \
                    proxy_server.cpp \
                    memcached_connection_pool.cpp \
                    memcached_backend.cpp \

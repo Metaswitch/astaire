@@ -28,6 +28,7 @@ struct options
   std::string local_memcached_server;
   std::string cluster_settings_file;
   std::string bind_addr;
+  int exception_max_ttl;
   bool log_to_file;
   std::string log_directory;
   int log_level;
@@ -39,6 +40,7 @@ enum Options
 {
   LOCAL_NAME=256+1,
   CLUSTER_SETTINGS_FILE,
+  EXCEPTION_MAX_TTL,
   BIND_ADDR,
   LOG_FILE,
   LOG_LEVEL,
@@ -55,6 +57,7 @@ const static struct option long_opt[] =
   {"log-file",               required_argument, NULL, LOG_FILE},
   {"log-level",              required_argument, NULL, LOG_LEVEL},
   {"pidfile",                required_argument, NULL, PIDFILE},
+  {"exception-max-ttl",      required_argument, NULL, EXCEPTION_MAX_TTL},
   {"daemon",                 no_argument,       NULL, DAEMON},
   {"help",                   no_argument,       NULL, HELP},
   {NULL,                     0,                 NULL, 0},
@@ -73,6 +76,9 @@ void usage(void)
        " --log-file=<directory>     Log to file in specified directory\n"
        " --log-level=N              Set log level to N (default: 4)\n"
        " --pidfile=<filename>       Write pidfile\n"
+       " --exception-max-ttl <secs>\n"
+       "                            The maximum time before the process exits if it hits an exception.\n"
+       "                            The actual time is randomised.\n"
        " --daemon                   Run as daemon\n"
        " --help                     Show this help screen\n"
        );
@@ -131,6 +137,12 @@ int init_options(int argc, char**argv, struct options& options)
 
     case BIND_ADDR:
       options.bind_addr = optarg;
+      break;
+
+    case EXCEPTION_MAX_TTL:
+      options.exception_max_ttl = atoi(optarg);
+      TRC_INFO("Max TTL after an exception set to %d",
+               options.exception_max_ttl);
       break;
 
     case PIDFILE:
@@ -204,6 +216,7 @@ int main(int argc, char** argv)
   options.cluster_settings_file = "";
   options.bind_addr = "";
   options.pidfile = "";
+  options.exception_max_ttl = 600;
   options.daemon = false;
 
   if (init_logging_options(argc, argv, options) != 0)
@@ -306,8 +319,16 @@ int main(int argc, char** argv)
                                                    memcached_comm_monitor,
                                                    vbucket_alarm);
 
+  HealthChecker* hc = new HealthChecker();
+  hc->start_thread();
+  ExceptionHandler* exception_handler = new ExceptionHandler(options.exception_max_ttl,
+                                                             false,
+                                                             hc);
+
   // Start the memcached proxy server.
-  ProxyServer* proxy_server = new ProxyServer(backend);
+  ProxyServer* proxy_server = new ProxyServer(backend,
+                                              500,
+                                              exception_handler);
   
   if (!proxy_server->start(options.bind_addr.c_str()))
   {
@@ -328,6 +349,9 @@ int main(int argc, char** argv)
   TRC_INFO("Astaire shutting down");
   CL_ASTAIRE_ENDED.log();
   delete proxy_server; proxy_server = NULL;
+  delete exception_handler; exception_handler = nullptr;
+  hc->stop_thread();
+  delete hc; hc = nullptr;
   delete memcached_comm_monitor; memcached_comm_monitor = NULL;
   delete vbucket_alarm; vbucket_alarm = NULL;
   delete backend; backend = NULL;

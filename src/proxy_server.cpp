@@ -19,14 +19,22 @@
 #include "memcached_tap_client.hpp"
 #include "proxy_server.hpp"
 
-ProxyServer::ProxyServer(MemcachedBackend* backend) :
+ProxyServer::ProxyServer(MemcachedBackend* backend,
+                         unsigned int num_threads,
+                         ExceptionHandler* exception_handler) :
   _listen_sock(0),
-  _backend(backend)
+  _backend(backend),
+  _thread_pool(num_threads,
+               exception_handler,
+               exception_callback)
 {
+  _thread_pool.start();
 }
 
 ProxyServer::~ProxyServer()
 {
+  _thread_pool.stop();
+  _thread_pool.join();
 }
 
 bool ProxyServer::start(const char* bind_addr)
@@ -104,23 +112,14 @@ bool ProxyServer::start(const char* bind_addr)
   }
 
   // Start the listening thread.
-  rc = pthread_create(&_listen_thread, NULL, listen_thread_entry_point, this);
-  if (rc < 0)
+  _thread_pool.add_work([this]()->void
   {
-    TRC_ERROR("Could not start listen thread: %d", rc);
-    return false;
-  }
+    this->listen_thread_fn();
+  });
 
   // All is well.
   TRC_STATUS("Started proxy server");
   return true;
-}
-
-void* ProxyServer::listen_thread_entry_point(void* server_param)
-{
-  ProxyServer* proxy_server = (ProxyServer*)server_param;
-  proxy_server->listen_thread_fn();
-  return NULL;
 }
 
 void ProxyServer::listen_thread_fn()
@@ -170,35 +169,16 @@ void ProxyServer::listen_thread_fn()
 
       TRC_STATUS("Accepted socket from %s", addr_string.c_str());
 
-      // Create a new connection, and a new thread to service it.
+      // Create a new connection, and add it to the thread pool to be served.
       Memcached::ServerConnection* connection =
         new Memcached::ServerConnection(sock, addr_string);
 
-      ConnectionThreadParams* params = new ConnectionThreadParams;
-      params->server = this;
-      params->connection = connection;
-
-      pthread_t tid;
-      int rc = pthread_create(&tid,
-                              NULL,
-                              connection_thread_entry_point,
-                              params);
-      if (rc < 0)
+      _thread_pool.add_work([this, connection]()->void
       {
-        // Couldn't create a thread to handle this connection. Just close it.
-        TRC_WARNING("Could not create per-connection thread: %d", rc);
-        delete connection; connection = NULL;
-      }
+        this->connection_thread_fn(connection);
+      });
     }
   }
-}
-
-void* ProxyServer::connection_thread_entry_point(void* params_arg)
-{
-  ConnectionThreadParams* params = (ConnectionThreadParams*)params_arg;
-  params->server->connection_thread_fn(params->connection);
-  delete params; params = NULL;
-  return NULL;
 }
 
 void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)

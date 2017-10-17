@@ -13,11 +13,14 @@
 #define PROXY_SERVER_HPP__
 
 #include "memcached_backend.hpp"
+#include "threadpool.h"
 
 class ProxyServer
 {
 public:
-  ProxyServer(MemcachedBackend* backend);
+  ProxyServer(MemcachedBackend* backend,
+              unsigned int num_threads,
+              ExceptionHandler* exception_handler);
   virtual ~ProxyServer();
 
   /// Start the proxy server.
@@ -26,18 +29,12 @@ public:
   bool start(const char* bind_addr);
 
 private:
-  /// Entry points for the listener thread.
-  static void* listen_thread_entry_point(void* server_param);
   void listen_thread_fn();
-
-  /// Entry points for the per-connection threads.
-  struct ConnectionThreadParams
-  {
-    ProxyServer* server;
-    Memcached::ServerConnection* connection;
-  };
-  static void* connection_thread_entry_point(void* params);
   void connection_thread_fn(Memcached::ServerConnection* connection);
+
+  static void inline exception_callback(std::function<void()> callable)
+  {
+  }
 
   /// Handle a GET request from the client and send an appropriate response.
   ///
@@ -71,11 +68,10 @@ private:
   /// Socket on which the server listens for new connections.
   int _listen_sock;
 
-  /// The thread that accepts connections on the listening socket.
-  pthread_t _listen_thread;
-
   /// The class used to access the local cluster of memcached instances.
   MemcachedBackend* _backend;
+
+  FunctorThreadPool _thread_pool;
 };
 
 #endif
