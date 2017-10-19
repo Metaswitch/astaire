@@ -153,7 +153,7 @@ void ProxyServer::listen_thread_fn()
                   &((sockaddr_in*)&remote_addr)->sin_addr,
                   buffer,
                   sizeof(buffer));
-        uint16_t port = ((sockaddr_in*)&remote_addr)->sin_port;
+        uint16_t port = ntohs(((sockaddr_in*)&remote_addr)->sin_port);
         addr_string.append(buffer).append(":").append(std::to_string(port));
       }
       else
@@ -163,7 +163,7 @@ void ProxyServer::listen_thread_fn()
                   &((sockaddr_in6*)&remote_addr)->sin6_addr,
                   buffer,
                   sizeof(buffer));
-        uint16_t port = ((sockaddr_in6*)&remote_addr)->sin6_port;
+        uint16_t port = ntohs(((sockaddr_in6*)&remote_addr)->sin6_port);
         addr_string.append("[").append(buffer).append("]")
                    .append(":").append(std::to_string(port));
       }
