@@ -33,3 +33,29 @@ Section: debug
 Priority: extra
 Depends: astaire-libs (= ${binary:Version}), gdb
 Description: Debugging symbols for Astaire's libraries
+
+Package: rogers
+Architecture: any
+Recommends: memcached, clearwater-memcached
+Depends: clearwater-infrastructure, clearwater-tcp-scalability, clearwater-log-cleanup, libzmq3, rogers-libs, clearwater-monit, libboost-filesystem1.54.0, libboost-regex1.54.0, libboost-system1.54.0
+Suggests: astaire-dbg
+Description: Rogers, memcached proxy server
+
+Package: rogers-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: rogers (= ${binary:Version}), rogers-libs-dbg, gdb
+Description: Debugging symbols for Rogers
+
+Package: rogers-libs
+Architecture: any
+Description: Libraries for Rogers, memcached proxy server
+
+Package: rogers-libs-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends: rogers-libs (= ${binary:Version}), gdb
+Description: Debugging symbols for Roger's libraries
+

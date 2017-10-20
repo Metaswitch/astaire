@@ -1,0 +1,2 @@
+usr/lib/*.so usr/share/clearwater/rogers/lib
+usr/lib/*.so.* usr/share/clearwater/rogers/lib
