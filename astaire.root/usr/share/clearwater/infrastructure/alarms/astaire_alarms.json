@@ -45,52 +45,6 @@
                     "action": "If a scale-in or scale-out operation is in progress, wait for resynchronization to finish before completing the operation."
                 }
             ]
-        },
-        {
-            "index": 5502,
-            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
-            "name": "ASTAIRE_MEMCACHED_COMM_ERROR",
-            "levels": [
-                {
-                    "severity": "CLEARED",
-                    "details": "Astaire communication to Memcached has been restored.",
-                    "description": "Astaire: Memcached communication error cleared.",
-                    "cause": "Astaire communication to Memcached has been restored. The previously issued alarm has been cleared.",
-                    "effect": "Normal Astaire operation has been restored.",
-                    "action": "No action."
-                },
-                {
-                    "severity": "CRITICAL",
-                    "details": "Astaire has failed to make a connection with all Memcached processes in the cluster. If this alarm does not clear, network connection may have been lost, or the Memcached processes may have failed and be in an unrecoverable condition.",
-                    "description": "Astaire: Memcached communication error.",
-                    "cause": "Astaire is unable to contact any Memcached processes.",
-                    "effect": "The system is unable to retrieve or write short lived data. The exact effect will depend on which processes are using this Astaire.",
-                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that the Memcached processes are operational and that network connectivity exists between Memcached and Astaire. If Memcached processes do not return to service then contact your support representative."
-                }
-            ]
-        },
-        {
-            "index": 5503,
-            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
-            "name": "ASTAIRE_VBUCKET_ERROR",
-            "levels": [
-                {
-                    "severity": "CLEARED",
-                    "details": "Astaire communication to Memcached has been restored for all data.",
-                    "description": "Astaire: Memcached vBucket communication error cleared.",
-                    "cause": "Astaire communication to Memcached has been restored for all data. The previously issued alarm has been cleared.",
-                    "effect": "Normal Astaire operation has been restored.",
-                    "action": "No action."
-                },
-                {
-                    "severity": "MAJOR",
-                    "details": "Astaire is unable to contact any Memcached processes for a subset of data, so some data will be unavailable. Ensure that all Memcached processes are operational and that network connectivity exists between them and Astaire.",
-                    "description": "Astaire: Memcached vBucket communication error.",
-                    "cause": "Astaire is unable to contact any Memcached processes for a subset of data.",
-                    "effect": "The system is unable to retrieve or write some short lived data. The exact effect will depend on which processes are using this Astaire.",
-                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that the Memcached processes are operational and that network connectivity exists between Memcached and Astaire. If Memcached processes do not return to service then contact your support representative."
-                }
-            ]
         }
     ]
 }

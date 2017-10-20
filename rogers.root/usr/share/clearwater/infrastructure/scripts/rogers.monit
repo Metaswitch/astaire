@@ -17,9 +17,9 @@ cat > /etc/monit/conf.d/rogers.monit <<EOF
 check process rogers_process pidfile /var/run/rogers/rogers.pid
   group rogers
 
-  start program   = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5500.3; /etc/init.d/rogers start'"
-  stop program    = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5500.3; /etc/init.d/rogers stop'"
-  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5500.3; /etc/init.d/rogers restart'"
+  start program   = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5550.3; /etc/init.d/rogers start'"
+  stop program    = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5550.3; /etc/init.d/rogers stop'"
+  restart program = "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5550.3; /etc/init.d/rogers restart'"
 
   if memory is greater than 80% for 3 cycles
      then exec "/bin/bash -c '/usr/share/clearwater/bin/issue-alarm monit 5500.3; /etc/init.d/rogers abort-restart'"

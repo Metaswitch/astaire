@@ -57,8 +57,12 @@ MODULE_DIR := ${ROOT}/modules
 include ../modules/cpp-common/makefiles/alarm-utils.mk
 
 ../usr/include/astaire_alarmdefinition.h : ../build/bin/alarm_header ../astaire.root/usr/share/clearwater/infrastructure/alarms/astaire_alarms.json
-	$< -j "../root/usr/share/clearwater/infrastructure/alarms/astaire_alarms.json" -n "astaire"
+	$< -j "../astaire.root/usr/share/clearwater/infrastructure/alarms/astaire_alarms.json" -n "astaire"
 	mv astaire_alarmdefinition.h $@
 
-#${rogers_OBJECT_DIR}/main.o : ../usr/include/astaire_alarmdefinition.h
-${astaire_OBJECT_DIR}/proxy_main.o : ../usr/include/astaire_alarmdefinition.h
+../usr/include/rogers_alarmdefinition.h : ../build/bin/alarm_header ../rogers.root/usr/share/clearwater/infrastructure/alarms/rogers_alarms.json
+	$< -j "../rogers.root/usr/share/clearwater/infrastructure/alarms/rogers_alarms.json" -n "rogers"
+	mv rogers_alarmdefinition.h $@
+
+${astaire_OBJECT_DIR}/main.o : ../usr/include/astaire_alarmdefinition.h
+${rogers_OBJECT_DIR}/proxy_main.o : ../usr/include/rogers_alarmdefinition.h
