@@ -62,7 +62,6 @@ void usage(void)
 {
   puts("Options:\n"
        "\n"
-       " --local-name <hostname>    Specify the name of the local memcached server\n"
        " --cluster-settings-file=<filename>\n"
        "                            The filename of the cluster settings file\n"
        " --bind-addr=<IP>           The IP address to bind to (default: all)\n"
