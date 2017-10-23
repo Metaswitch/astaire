@@ -195,6 +195,7 @@ void ProxyServer::listen_thread_fn()
         // Couldn't create a thread to handle this connection. Just close it.
         TRC_WARNING("Could not create per-connection thread: %d", rc);
         delete connection; connection = NULL;
+        delete params; params = NULL;
       }
     }
   }
