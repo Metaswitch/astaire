@@ -178,9 +178,16 @@ void ProxyServer::listen_thread_fn()
       params->server = this;
       params->connection = connection;
 
+      // We never join() these threads once they're created, so we must create
+      // them as detached rather than joinable to allow the system to free up
+      // the thread's resources once it has terminated
+      pthread_attr_t tattr;
+      pthread_attr_init(&tattr);
+      pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
+
       pthread_t tid;
       int rc = pthread_create(&tid,
-                              NULL,
+                              &tattr,
                               connection_thread_entry_point,
                               params);
       if (rc < 0)
@@ -188,6 +195,7 @@ void ProxyServer::listen_thread_fn()
         // Couldn't create a thread to handle this connection. Just close it.
         TRC_WARNING("Could not create per-connection thread: %d", rc);
         delete connection; connection = NULL;
+        delete params; params = NULL;
       }
     }
   }
