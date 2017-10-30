@@ -1,5 +1,5 @@
 /**
- * @file memcachedstore.cpp Memcached-backed implementation of the registration data store.
+ * @file memcached_backend.cpp Memcached-backed implementation of the registration data store.
  *
  * Copyright (C) Metaswitch Networks 2016
  * If license terms are provided to you in a COPYING file in the root directory

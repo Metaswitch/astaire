@@ -57,5 +57,5 @@ Architecture: any
 Section: debug
 Priority: extra
 Depends: rogers-libs (= ${binary:Version}), gdb
-Description: Debugging symbols for Roger's libraries
+Description: Debugging symbols for Rogers' libraries
 

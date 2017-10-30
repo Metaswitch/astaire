@@ -15,8 +15,8 @@
 # Required-Stop:     $remote_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Astaire
-# Description:       Astaire, active resynchronisation for memcached clusters
+# Short-Description: Rogers
+# Description:       Rogers, memcached proxy server
 ### END INIT INFO
 
 # Author: Project Clearwater Maintainers <maintainers@projectclearwater.org>

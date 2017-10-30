@@ -16,7 +16,7 @@ astaire_SOURCES := ${COMMON_SOURCES} \
                    statistic.cpp \
                    zmq_lvc.cpp \
                    astaire.cpp \
-                   main.cpp
+                   resync_main.cpp
 
 rogers_SOURCES :=  ${COMMON_SOURCES} \
                    base_communication_monitor.cpp \

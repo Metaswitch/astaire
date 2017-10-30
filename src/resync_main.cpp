@@ -1,5 +1,5 @@
 /**
- * @file main.cpp - Astaire entry point
+ * @file resync_main.cpp - Astaire - memcached resync - entry point
  *
  * Copyright (C) Metaswitch Networks 2016
  * If license terms are provided to you in a COPYING file in the root directory

@@ -2,7 +2,7 @@
 
 # @file check-rogers-uptime
 #
-# Copyright (C) Metaswitch Networks 2016
+# Copyright (C) Metaswitch Networks 2017
 # If license terms are provided to you in a COPYING file in the root directory
 # of the source code repository by which you are accessing this code, then
 # the license outlined in that COPYING file applies to your use.
@@ -12,4 +12,4 @@
 # Monit 5.8.1 does not support passing arguments to check program scripts.
 # check-uptime provides common uptime-checking code. This wrapper script
 # uses it, and can be called with no arguments.
-/usr/share/clearwater/bin/check-uptime /var/run/rogers/rogers.pid monit 5500.1
+/usr/share/clearwater/bin/check-uptime /var/run/rogers/rogers.pid monit 13000.1

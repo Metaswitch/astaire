@@ -106,46 +106,4 @@ const static PDLog CL_ASTAIRE_COMPLETE_RESYNC
     "all other Astaire instances have completed their resync operations."
 );
 
-const static PDLog1<const char*> CL_ROGERS_INVALID_OPTION
-(
-  PDLogBase::CL_ASTAIRE_ID + 8,
-  LOG_ERR,
-  "Fatal - An invalid command line option, %s, was passed to Rogers. The application will exit and restart until the problem is fixed. Run with --help for options.",
-  "There was an invalid command line option in the configuration files.",
-  "The application will exit and restart until the problem is fixed.",
-  "Check that the configuration files in /etc/clearwater and /etc/clearwater/cluster_settings are correct."
-);
-
-const static PDLog CL_ROGERS_STARTED
-(
-  PDLogBase::CL_ASTAIRE_ID + 9,
-  LOG_INFO,
-  "Rogers started.",
-  "The Rogers application is starting.",
-  "Normal.",
-  "None."
-);
-
-const static PDLog CL_ROGERS_ENDED
-(
-  PDLogBase::CL_ASTAIRE_ID + 3,
-  LOG_ERR,
-  "Rogers ended - Termination signal received - terminating.",
-  "Rogers has been terminated by Monit or has exited.",
-  "The Rogers service is not longer available.",
-    "(1). This occurs normally when Rogers is stopped. "
-    "(2). If Astaire fails to respond to monit queries in a timely manner, monit restarts the application."
-);
-
-const static PDLog1<const char*> CL_ROGERS_TERMINATED
-(
-  PDLogBase::CL_ASTAIRE_ID + 4,
-  LOG_ERR,
-  "Fatal - Rogers has exited or been terminated with signal %s.",
-  "Rogers has encountered a fatal software error or has been terminated",
-  "The application will exit and restart until the problem is fixed.",
-  "Ensure that Rogers has been installed correctly and that it "
-    "has valid configuration."
-);
-
 #endif

@@ -1,7 +1,7 @@
 /**
- * @file main.cpp - Proxy entry point
+ * @file main.cpp - Rogers - memcached proxy - entry point
  *
- * Copyright (C) Metaswitch Networks 2016
+ * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
  * of the source code repository by which you are accessing this code, then
  * the license outlined in that COPYING file applies to your use.
@@ -10,11 +10,10 @@
  */
 
 #include "memcached_tap_client.hpp"
-#include "astaire_pd_definitions.hpp"
-#include "astaire_statistics.hpp"
+#include "rogers_pd_definitions.hpp"
 #include "logger.h"
 #include "utils.h"
-#include "astaire_alarmdefinition.h"
+#include "rogers_alarmdefinition.h"
 #include "proxy_server.hpp"
 #include "communicationmonitor.h"
 
@@ -152,7 +151,7 @@ int init_options(int argc, char**argv, struct options& options)
 
 static sem_t term_sem;
 
-// Signal handler that triggers astaire termination.
+// Signal handler that triggers rogers termination.
 void terminate_handler(int /*sig*/)
 {
   sem_post(&term_sem);
@@ -264,15 +263,15 @@ int main(int argc, char** argv)
 
   // Create communication monitor for memcached
   CommunicationMonitor* memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                                                    "astaire",
-                                                                                    AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
+                                                                                    "rogers",
+                                                                                    AlarmDef::ROGERS_MEMCACHED_COMM_ERROR,
                                                                                     AlarmDef::CRITICAL),
                                                                           "Rogers",
                                                                           "Memcached");
   // Create vbucket alarm
   Alarm* vbucket_alarm = new Alarm(alarm_manager,
-                                   "astaire",
-                                   AlarmDef::ASTAIRE_VBUCKET_ERROR,
+                                   "rogers",
+                                   AlarmDef::ROGERS_VBUCKET_ERROR,
                                    AlarmDef::MAJOR);
 
   MemcachedBackend* backend = new MemcachedBackend(view_cfg,

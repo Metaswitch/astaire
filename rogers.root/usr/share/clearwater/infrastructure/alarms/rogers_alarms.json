@@ -1,7 +1,7 @@
 {
     "alarms": [
         {
-            "index": 5550,
+            "index": 13000,
             "cause": "SOFTWARE_ERROR",
             "name": "ROGERS_PROCESS_FAIL",
             "levels": [
@@ -10,7 +10,7 @@
                     "details": "The Rogers process has been restored to normal operation.",
                     "description": "Rogers: Process failure cleared.",
                     "cause": "The Rogers process has been restored to normal operation. The previously issued alarm has been cleared.",
-                    "effect": "Memcached synchronization for cluster nodes is fully operational.",
+                    "effect": "Memcached requests will now be proxies to the correct node in the cluster.",
                     "action": "No action."
                 },
                 {
@@ -18,13 +18,13 @@
                     "details": "Monit has detected that the Rogers process has failed. A restart will automatically be attempted. If this alarm does not clear, the Rogers process may have been stopped or an unrecoverable failure may have occurred.",
                     "description": "Rogers: Process failure.",
                     "cause": "Monit has detected that the Rogers process has failed. A restart will automatically be attempted.",
-                    "effect": "Synchronization of the Memcached database will be delayed until the process recovers.",
+                    "effect": "Memcached requests will not be proxied by this node, resulting in a reduction in service. If there are no other active Rogers nodes, no Memcached requests will be able to be made to this cluster.",
                     "action": "If this alarm does not clear, the Rogers process may have been stopped or an unrecoverable failure may have occurred. If the alarm fails to clear then contact your support representative."
                 }
             ]
         },
         {
-            "index": 5551,
+            "index": 13001,
             "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
             "name": "ROGERS_MEMCACHED_COMM_ERROR",
             "levels": [
@@ -47,7 +47,7 @@
             ]
         },
         {
-            "index": 5552,
+            "index": 13002,
             "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
             "name": "ROGERS_VBUCKET_ERROR",
             "levels": [
