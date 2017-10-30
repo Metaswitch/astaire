@@ -153,7 +153,7 @@ void ProxyServer::listen_thread_fn()
                   &((sockaddr_in*)&remote_addr)->sin_addr,
                   buffer,
                   sizeof(buffer));
-        uint16_t port = ((sockaddr_in*)&remote_addr)->sin_port;
+        uint16_t port = ntohs(((sockaddr_in*)&remote_addr)->sin_port);
         addr_string.append(buffer).append(":").append(std::to_string(port));
       }
       else
@@ -163,7 +163,7 @@ void ProxyServer::listen_thread_fn()
                   &((sockaddr_in6*)&remote_addr)->sin6_addr,
                   buffer,
                   sizeof(buffer));
-        uint16_t port = ((sockaddr_in6*)&remote_addr)->sin6_port;
+        uint16_t port = ntohs(((sockaddr_in6*)&remote_addr)->sin6_port);
         addr_string.append("[").append(buffer).append("]")
                    .append(":").append(std::to_string(port));
       }
@@ -178,9 +178,16 @@ void ProxyServer::listen_thread_fn()
       params->server = this;
       params->connection = connection;
 
+      // We never join() these threads once they're created, so we must create
+      // them as detached rather than joinable to allow the system to free up
+      // the thread's resources once it has terminated
+      pthread_attr_t tattr;
+      pthread_attr_init(&tattr);
+      pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
+
       pthread_t tid;
       int rc = pthread_create(&tid,
-                              NULL,
+                              &tattr,
                               connection_thread_entry_point,
                               params);
       if (rc < 0)
@@ -188,6 +195,7 @@ void ProxyServer::listen_thread_fn()
         // Couldn't create a thread to handle this connection. Just close it.
         TRC_WARNING("Could not create per-connection thread: %d", rc);
         delete connection; connection = NULL;
+        delete params; params = NULL;
       }
     }
   }
