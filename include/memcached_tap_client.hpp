@@ -463,7 +463,7 @@ namespace Memcached
   // Parsing utility fuctions.
   bool is_msg_complete(const std::string& msg,
                        bool& request,
-                       uint16_t& body_length,
+                       uint32_t& body_length,
                        uint8_t& op_code);
   template <class T> BaseMessage* from_wire_int(const std::string& msg)
   {
