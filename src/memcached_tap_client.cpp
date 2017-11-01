@@ -26,7 +26,7 @@ void Memcached::Utils::write(const std::string& str, std::string& ss)
 
 bool Memcached::is_msg_complete(const std::string& msg,
                                 bool& request,
-                                uint16_t& body_length,
+                                uint32_t& body_length,
                                 uint8_t& op_code)
 {
   uint32_t raw_length = msg.length();
@@ -67,7 +67,7 @@ bool Memcached::from_wire(std::string& msg,
                           Memcached::BaseMessage*& output)
 {
   bool request;
-  uint16_t body_length;
+  uint32_t body_length;
   uint8_t op_code;
 
   if (!is_msg_complete(msg, request, body_length, op_code))
