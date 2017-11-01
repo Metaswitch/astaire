@@ -107,7 +107,6 @@ bool Memcached::from_wire(std::string& msg,
       break;
     }
   }
-
   else
   {
     switch (op_code)
