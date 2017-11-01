@@ -105,4 +105,5 @@ const static PDLog CL_ASTAIRE_COMPLETE_RESYNC
   "If the cluster is being resized, you may continue the resize operation once "
     "all other Astaire instances have completed their resync operations."
 );
+
 #endif

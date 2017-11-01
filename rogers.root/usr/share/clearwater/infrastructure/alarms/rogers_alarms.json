@@ -1,0 +1,73 @@
+{
+    "alarms": [
+        {
+            "index": 13000,
+            "cause": "SOFTWARE_ERROR",
+            "name": "ROGERS_PROCESS_FAIL",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "The Rogers process has been restored to normal operation.",
+                    "description": "Rogers: Process failure cleared.",
+                    "cause": "The Rogers process has been restored to normal operation. The previously issued alarm has been cleared.",
+                    "effect": "Memcached requests will now be proxies to the correct node in the cluster.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Monit has detected that the Rogers process has failed. A restart will automatically be attempted. If this alarm does not clear, the Rogers process may have been stopped or an unrecoverable failure may have occurred.",
+                    "description": "Rogers: Process failure.",
+                    "cause": "Monit has detected that the Rogers process has failed. A restart will automatically be attempted.",
+                    "effect": "Memcached requests will not be proxied by this node, resulting in a reduction in service. If there are no other active Rogers nodes, no Memcached requests will be able to be made to this cluster.",
+                    "action": "If this alarm does not clear, the Rogers process may have been stopped or an unrecoverable failure may have occurred. If the alarm fails to clear then contact your support representative."
+                }
+            ]
+        },
+        {
+            "index": 13001,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "ROGERS_MEMCACHED_COMM_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Rogers communication to Memcached has been restored.",
+                    "description": "Rogers: Memcached communication error cleared.",
+                    "cause": "Rogers communication to Memcached has been restored. The previously issued alarm has been cleared.",
+                    "effect": "Normal Rogers operation has been restored.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "CRITICAL",
+                    "details": "Rogers has failed to make a connection with all Memcached processes in the cluster. If this alarm does not clear, network connection may have been lost, or the Memcached processes may have failed and be in an unrecoverable condition.",
+                    "description": "Rogers: Memcached communication error.",
+                    "cause": "Rogers is unable to contact any Memcached processes.",
+                    "effect": "The system is unable to retrieve or write short lived data. The exact effect will depend on which processes are using this Rogers.",
+                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that the Memcached processes are operational and that network connectivity exists between Memcached and Rogers. If Memcached processes do not return to service then contact your support representative."
+                }
+            ]
+        },
+        {
+            "index": 13002,
+            "cause": "UNDERLYING_RESOURCE_UNAVAILABLE",
+            "name": "ROGERS_VBUCKET_ERROR",
+            "levels": [
+                {
+                    "severity": "CLEARED",
+                    "details": "Rogers communication to Memcached has been restored for all data.",
+                    "description": "Rogers: Memcached vBucket communication error cleared.",
+                    "cause": "Rogers communication to Memcached has been restored for all data. The previously issued alarm has been cleared.",
+                    "effect": "Normal Rogers operation has been restored.",
+                    "action": "No action."
+                },
+                {
+                    "severity": "MAJOR",
+                    "details": "Rogers is unable to contact any Memcached processes for a subset of data, so some data will be unavailable. Ensure that all Memcached processes are operational and that network connectivity exists between them and Rogers.",
+                    "description": "Rogers: Memcached vBucket communication error.",
+                    "cause": "Rogers is unable to contact any Memcached processes for a subset of data.",
+                    "effect": "The system is unable to retrieve or write some short lived data. The exact effect will depend on which processes are using this Rogers.",
+                    "action": "Monitor for this alarm to clear. If this alarm does not clear, ensure that the Memcached processes are operational and that network connectivity exists between Memcached and Rogers. If Memcached processes do not return to service then contact your support representative."
+                }
+            ]
+        }
+    ]
+}

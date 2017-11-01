@@ -1,7 +1,7 @@
 /**
- * @file main.cpp - Astaire entry point
+ * @file main.cpp - Rogers - memcached proxy - entry point
  *
- * Copyright (C) Metaswitch Networks 2016
+ * Copyright (C) Metaswitch Networks 2017
  * If license terms are provided to you in a COPYING file in the root directory
  * of the source code repository by which you are accessing this code, then
  * the license outlined in that COPYING file applies to your use.
@@ -10,12 +10,10 @@
  */
 
 #include "memcached_tap_client.hpp"
-#include "astaire.hpp"
-#include "astaire_pd_definitions.hpp"
-#include "astaire_statistics.hpp"
+#include "rogers_pd_definitions.hpp"
 #include "logger.h"
 #include "utils.h"
-#include "astaire_alarmdefinition.h"
+#include "rogers_alarmdefinition.h"
 #include "proxy_server.hpp"
 #include "communicationmonitor.h"
 
@@ -25,7 +23,6 @@
 
 struct options
 {
-  std::string local_memcached_server;
   std::string cluster_settings_file;
   std::string bind_addr;
   bool log_to_file;
@@ -37,8 +34,7 @@ struct options
 
 enum Options
 {
-  LOCAL_NAME=256+1,
-  CLUSTER_SETTINGS_FILE,
+  CLUSTER_SETTINGS_FILE=256+1,
   BIND_ADDR,
   LOG_FILE,
   LOG_LEVEL,
@@ -49,7 +45,6 @@ enum Options
 
 const static struct option long_opt[] =
 {
-  {"local-name",             required_argument, NULL, LOCAL_NAME},
   {"cluster-settings-file",  required_argument, NULL, CLUSTER_SETTINGS_FILE},
   {"bind-addr",              required_argument, NULL, BIND_ADDR},
   {"log-file",               required_argument, NULL, LOG_FILE},
@@ -66,7 +61,6 @@ void usage(void)
 {
   puts("Options:\n"
        "\n"
-       " --local-name <hostname>    Specify the name of the local memcached server\n"
        " --cluster-settings-file=<filename>\n"
        "                            The filename of the cluster settings file\n"
        " --bind-addr=<IP>           The IP address to bind to (default: all)\n"
@@ -121,10 +115,6 @@ int init_options(int argc, char**argv, struct options& options)
   {
     switch (opt)
     {
-    case LOCAL_NAME:
-      options.local_memcached_server = optarg;
-      break;
-
     case CLUSTER_SETTINGS_FILE:
       options.cluster_settings_file = optarg;
       break;
@@ -139,7 +129,7 @@ int init_options(int argc, char**argv, struct options& options)
 
     case HELP:
       usage();
-      CL_ASTAIRE_ENDED.log();
+      CL_ROGERS_ENDED.log();
       exit(0);
 
     case DAEMON:
@@ -149,7 +139,7 @@ int init_options(int argc, char**argv, struct options& options)
       break;
 
     default:
-      CL_ASTAIRE_INVALID_OPTION.log(argv[optind - 1]);
+      CL_ROGERS_INVALID_OPTION.log(argv[optind - 1]);
       TRC_ERROR("Unknown option: %s.  Run with --help for options.",
                 argv[optind - 1]);
       exit(2);
@@ -161,7 +151,7 @@ int init_options(int argc, char**argv, struct options& options)
 
 static sem_t term_sem;
 
-// Signal handler that triggers astaire termination.
+// Signal handler that triggers rogers termination.
 void terminate_handler(int /*sig*/)
 {
   sem_post(&term_sem);
@@ -181,7 +171,7 @@ void signal_handler(int sig)
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
 
-  CL_ASTAIRE_TERMINATED.log(strsignal(sig));
+  CL_ROGERS_TERMINATED.log(strsignal(sig));
 
   // Dump a core.
   abort();
@@ -200,7 +190,6 @@ int main(int argc, char** argv)
   options.log_to_file = false;
   options.log_level = 0;
   options.log_directory = "";
-  options.local_memcached_server = "";
   options.cluster_settings_file = "";
   options.bind_addr = "";
   options.pidfile = "";
@@ -220,7 +209,7 @@ int main(int argc, char** argv)
 
   // We should now have a connection to syslog so we can write the started ENT
   // log.
-  CL_ASTAIRE_STARTED.log();
+  CL_ROGERS_STARTED.log();
 
   std::stringstream options_ss;
   for (int ii = 0; ii < argc; ii++)
@@ -236,19 +225,13 @@ int main(int argc, char** argv)
     return 1;
   }
 
-  if (options.local_memcached_server == "")
-  {
-    TRC_ERROR("Must supply local memcached server name");
-    return 2;
-  }
-
   if (options.cluster_settings_file == "")
   {
     TRC_ERROR("Must supply cluster settings file");
     return 2;
   }
 
-  TRC_STATUS("Astaire starting up");
+  TRC_STATUS("Rogers starting up");
 
   if (options.pidfile != "")
   {
@@ -264,13 +247,8 @@ int main(int argc, char** argv)
   start_signal_handlers();
 
   AlarmManager* alarm_manager = new AlarmManager();
-  Alarm* astaire_resync_alarm = new Alarm(alarm_manager,
-                                          "astaire",
-                                          AlarmDef::ASTAIRE_RESYNC_IN_PROGRESS,
-                                          AlarmDef::MINOR);
 
   // These values match those in MemcachedStore's constructor
-  MemcachedStoreView* view = new MemcachedStoreView(128, 2);
   MemcachedConfigReader* view_cfg =
     new MemcachedConfigFileReader(options.cluster_settings_file);
 
@@ -283,23 +261,17 @@ int main(int argc, char** argv)
     return 3;
   }
 
-  // Create statistics infrastructure.
-  std::string stats[] = { "astaire_global", "astaire_connections" };
-  LastValueCache* lvc = new LastValueCache(2, stats, "astaire");
-  AstaireGlobalStatistics* global_stats = new AstaireGlobalStatistics(lvc);
-  AstairePerConnectionStatistics* per_conn_stats = new AstairePerConnectionStatistics(lvc);
-
   // Create communication monitor for memcached
   CommunicationMonitor* memcached_comm_monitor = new CommunicationMonitor(new Alarm(alarm_manager,
-                                                                                    "astaire",
-                                                                                    AlarmDef::ASTAIRE_MEMCACHED_COMM_ERROR,
+                                                                                    "rogers",
+                                                                                    AlarmDef::ROGERS_MEMCACHED_COMM_ERROR,
                                                                                     AlarmDef::CRITICAL),
-                                                                          "Astaire",
+                                                                          "Rogers",
                                                                           "Memcached");
   // Create vbucket alarm
   Alarm* vbucket_alarm = new Alarm(alarm_manager,
-                                   "astaire",
-                                   AlarmDef::ASTAIRE_VBUCKET_ERROR,
+                                   "rogers",
+                                   AlarmDef::ROGERS_VBUCKET_ERROR,
                                    AlarmDef::MAJOR);
 
   MemcachedBackend* backend = new MemcachedBackend(view_cfg,
@@ -315,32 +287,20 @@ int main(int argc, char** argv)
     return 4;
   }
 
-  // Start Astaire last as this might cause a resync to happen synchronously.
-  Astaire* astaire = new Astaire(view,
-                                 view_cfg,
-                                 astaire_resync_alarm,
-                                 global_stats,
-                                 per_conn_stats,
-                                 options.local_memcached_server);
-
   sem_wait(&term_sem);
 
-  TRC_INFO("Astaire shutting down");
-  CL_ASTAIRE_ENDED.log();
+  TRC_INFO("Rogers shutting down");
+  CL_ROGERS_ENDED.log();
   delete proxy_server; proxy_server = NULL;
   delete memcached_comm_monitor; memcached_comm_monitor = NULL;
   delete vbucket_alarm; vbucket_alarm = NULL;
   delete backend; backend = NULL;
-  delete per_conn_stats;
-  delete global_stats;
-  delete lvc;
-  delete astaire;
   delete alarm_manager; alarm_manager = NULL;
   delete view_cfg;
-  delete view;
 
   signal(SIGTERM, SIG_DFL);
   sem_destroy(&term_sem);
 
   return 0;
 }
+
