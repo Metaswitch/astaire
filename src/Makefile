@@ -64,5 +64,5 @@ include ../modules/cpp-common/makefiles/alarm-utils.mk
 	$< -j "../rogers.root/usr/share/clearwater/infrastructure/alarms/rogers_alarms.json" -n "rogers"
 	mv rogers_alarmdefinition.h $@
 
-${astaire_OBJECT_DIR}/main.o : ../usr/include/astaire_alarmdefinition.h
+${astaire_OBJECT_DIR}/resync_main.o : ../usr/include/astaire_alarmdefinition.h
 ${rogers_OBJECT_DIR}/proxy_main.o : ../usr/include/rogers_alarmdefinition.h
