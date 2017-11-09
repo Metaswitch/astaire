@@ -58,7 +58,8 @@ MemcachedBackend::MemcachedBackend(MemcachedConfigReader* config_reader,
   // timeout because libmemcached tries to connect to all servers sequentially
   // during start-up, and if any are not up we don't want to wait for any
   // significant length of time.
-  _options = "--CONNECT-TIMEOUT=10 --SUPPORT-CAS --POLL-TIMEOUT=250 --BINARY-PROTOCOL";
+  // See also the desciption of LOCAL_MEMCACHED_CONNECTION_LATENCY_MS.
+  _options = "--CONNECT-TIMEOUT=10 --SUPPORT-CAS --POLL-TIMEOUT=25 --BINARY-PROTOCOL";
 
   // Create an updater to keep the store configured appropriately.
   _updater = new Updater<void, MemcachedBackend>(this, std::mem_fun(&MemcachedBackend::update_config));
