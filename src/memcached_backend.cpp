@@ -54,12 +54,9 @@ MemcachedBackend::MemcachedBackend(MemcachedConfigReader* config_reader,
   // Create the mutex for protecting vbucket comm state.
   pthread_mutex_init(&_vbucket_comm_lock, NULL);
 
-  // Set up the fixed options for memcached.  We use a very short connect
-  // timeout because libmemcached tries to connect to all servers sequentially
-  // during start-up, and if any are not up we don't want to wait for any
-  // significant length of time.
-  // See also the desciption of LOCAL_MEMCACHED_CONNECTION_LATENCY_MS.
-  _options = "--CONNECT-TIMEOUT=10 --SUPPORT-CAS --POLL-TIMEOUT=25 --BINARY-PROTOCOL";
+  // Set up the fixed options for memcached.  See also the options configured
+  // on the MemcachedConnectionPool (including the connect timeout).
+  _options = "--SUPPORT-CAS --POLL-TIMEOUT=25 --BINARY-PROTOCOL";
 
   // Create an updater to keep the store configured appropriately.
   _updater = new Updater<void, MemcachedBackend>(this, std::mem_fun(&MemcachedBackend::update_config));
