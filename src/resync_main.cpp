@@ -165,14 +165,17 @@ void signal_handler(int sig)
   signal(SIGABRT, SIG_DFL);
   signal(SIGSEGV, signal_handler);
 
-  // Log the signal, along with a backtrace.
+  // Log the signal, along with a simple backtrace.
   TRC_BACKTRACE("Signal %d caught", sig);
+
+  CL_ASTAIRE_TERMINATED.log(strsignal(sig));
+
+  // Log a full backtrace to make debugging easier.
+  TRC_BACKTRACE_ADV();
 
   // Ensure the log files are complete - the core file created by abort() below
   // will trigger the log files to be copied to the diags bundle
   TRC_COMMIT();
-
-  CL_ASTAIRE_TERMINATED.log(strsignal(sig));
 
   // Dump a core.
   abort();
