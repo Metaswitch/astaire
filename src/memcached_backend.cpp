@@ -373,6 +373,14 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
     TRC_ERROR("Failed to read data for %s from %d replicas",
               key.c_str(), replica_addresses.size());
 
+    std::string ip_string;
+    for (size_t iii = 0; iii < replica_addresses.size(); ++iii)
+    {
+      ip_string += " \n";
+      ip_string += replica_addresses[iii].address_and_port_to_string();
+    }
+    TRC_ERROR("Failed to read from: %s", ip_string.c_str());
+
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
 
     update_vbucket_comm_state(vbucket, FAILED);
@@ -573,6 +581,13 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
 
     TRC_ERROR("Failed to write data for %s to %d replicas",
               key.c_str(), replica_addresses.size());
+    std::string ip_string;
+    for (size_t iii = 0; iii < replica_addresses.size(); ++iii)
+    {
+      ip_string += " \n";
+      ip_string += replica_addresses[iii].address_and_port_to_string();
+    }
+    TRC_ERROR("Failed to write to: %s", ip_string.c_str());
 
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
   }
