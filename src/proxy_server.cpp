@@ -14,10 +14,13 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <atomic>
 
 #include "log.h"
 #include "memcached_tap_client.hpp"
 #include "proxy_server.hpp"
+
+std::atomic<int32_t> num_active_threads(0);
 
 ProxyServer::ProxyServer(MemcachedBackend* backend) :
   _listen_sock(0),
@@ -127,12 +130,13 @@ void ProxyServer::listen_thread_fn()
 {
   while (true)
   {
-    TRC_DEBUG("Waiting for new connections");
+    TRC_STATUS("Waiting for new connections");
 
     sockaddr_storage remote_addr;
     socklen_t addr_len = sizeof(remote_addr);
 
     int sock = accept(_listen_sock, (sockaddr*)&remote_addr, &addr_len);
+    TRC_STATUS("Detected new connection");
 
     if (sock < 0)
     {
@@ -186,6 +190,7 @@ void ProxyServer::listen_thread_fn()
       pthread_attr_setdetachstate(&tattr, PTHREAD_CREATE_DETACHED);
 
       pthread_t tid;
+      TRC_STATUS("Starting connection thread for %s", addr_string.c_str());
       int rc = pthread_create(&tid,
                               &tattr,
                               connection_thread_entry_point,
@@ -213,7 +218,10 @@ void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)
 {
   bool keep_going = true;
 
-  TRC_STATUS("Starting connection thread for %s", connection->address().c_str());
+  num_active_threads++;
+  TRC_STATUS("Started connection thread for %s, now have %d connection threads",
+             connection->address().c_str(),
+             num_active_threads.load());
 
   while (keep_going)
   {
@@ -225,7 +233,7 @@ void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)
       if (msg->is_request())
       {
         Memcached::BaseReq* req = dynamic_cast<Memcached::BaseReq*>(msg);
-        TRC_DEBUG("Received request with type: 0x%x", req->op_code());
+        TRC_VERBOSE("Received request with type: 0x%x from %s", req->op_code(), connection->address().c_str());
 
         switch (req->op_code())
         {
@@ -307,6 +315,7 @@ void ProxyServer::connection_thread_fn(Memcached::ServerConnection* connection)
   // If we fall out of the above loop for any reason, we should close the
   // connection.
   delete connection; connection = NULL;
+  num_active_threads--;
 }
 
 void ProxyServer::handle_get(Memcached::GetReq* get_req,
