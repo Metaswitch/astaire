@@ -324,12 +324,12 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
     else
     {
       // Error from this node, so consider it inactive.
-      TRC_ERROR("Read for %s on replica %d (%s) returned error %d (%s)",
-                key.c_str(),
-                replica_idx,
-                replica_addresses[replica_idx].address_and_port_to_string().c_str(),
-                rc,
-                memcached_strerror(conn, rc));
+      TRC_WARNING("Read for %s on replica %d (%s) returned error %d (%s)",
+                  key.c_str(),
+                  replica_idx,
+                  replica_addresses[replica_idx].address_and_port_to_string().c_str(),
+                  rc,
+                  memcached_strerror(conn, rc));
       ++failed_replicas;
     }
   }
@@ -653,7 +653,7 @@ Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key)
                 replica_addresses[ii].address_and_port_to_string().c_str(),
                 rc,
                 memcached_strerror(conn, rc));
- 
+
 
       if (best_status != Memcached::ResultCode::NO_ERROR)
       {
