@@ -324,7 +324,7 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
     else
     {
       // Error from this node, so consider it inactive.
-      TRC_WARNING("Read for %s on replica %d (%s) returned error %d (%s)",
+      TRC_DEBUG("Read for %s on replica %d (%s) returned error %d (%s)",
                   key.c_str(),
                   replica_idx,
                   replica_addresses[replica_idx].address_and_port_to_string().c_str(),
@@ -380,8 +380,8 @@ Memcached::ResultCode MemcachedBackend::read_data(const std::string& key,
       ip_string += replica.address_and_port_to_string();
       ip_string += ", ";
     }
-    TRC_ERROR("Failed to read data for %s from %d replicas (%s)",
-              key.c_str(), replica_addresses.size(), ip_string.c_str());
+    TRC_VERBOSE("Failed to read data for %s from %d replicas (%s)",
+                key.c_str(), replica_addresses.size(), ip_string.c_str());
 
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
 
@@ -538,19 +538,19 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
       // A NOT_FOUND, NOT_STORED or EXISTS response indicates a concurrent write
       // failure, so return this to the application immediately - don't go on to
       // other replicas.
-      TRC_WARNING("Contention writing data for %s to store", key.c_str());
+      TRC_VERBOSE("Contention writing data for %s to store", key.c_str());
       status = libmemcached_result_to_memcache_status(rc);
       break;
     }
     else
     {
-      TRC_ERROR("Conditional write (opcode %d) for %s failed to replica %d (%s) with error %d (%s)",
-                operation,
-                key.c_str(),
-                replica_idx,
-                replica_addresses[replica_idx].address_and_port_to_string().c_str(),
-                rc,
-                memcached_strerror(conn, rc));
+      TRC_VERBOSE("Conditional write (opcode %d) for %s failed to replica %d (%s) with error %d (%s)",
+                  operation,
+                  key.c_str(),
+                  replica_idx,
+                  replica_addresses[replica_idx].address_and_port_to_string().c_str(),
+                  rc,
+                  memcached_strerror(conn, rc));
     }
   }
 
@@ -597,7 +597,7 @@ Memcached::ResultCode MemcachedBackend::write_data(Memcached::OpCode operation,
       ip_string += replica.address_and_port_to_string();
       ip_string += ", ";
     }
-    TRC_ERROR("Failed to write data for %s to %d replicas (%s)",
+    TRC_VERBOSE("Failed to write data for %s to %d replicas (%s)",
               key.c_str(), replica_addresses.size(), ip_string.c_str());
 
     status = Memcached::ResultCode::TEMPORARY_FAILURE;
@@ -647,12 +647,12 @@ Memcached::ResultCode MemcachedBackend::delete_data(const std::string& key)
 
     if (!memcached_success(rc))
     {
-      TRC_ERROR("Delete for %s failed to replica %d (%s) with error %d (%s)",
-                key.c_str(),
-                ii,
-                replica_addresses[ii].address_and_port_to_string().c_str(),
-                rc,
-                memcached_strerror(conn, rc));
+      TRC_VERBOSE("Delete for %s failed to replica %d (%s) with error %d (%s)",
+                  key.c_str(),
+                  ii,
+                  replica_addresses[ii].address_and_port_to_string().c_str(),
+                  rc,
+                  memcached_strerror(conn, rc));
 
 
       if (best_status != Memcached::ResultCode::NO_ERROR)
